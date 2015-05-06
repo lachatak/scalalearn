@@ -1,17 +1,18 @@
 ## Spark with Scalaz ##
-Recently I have had a little spare time to play around with [Spark](https://spark.apache.org/). It promisses not less than a 100x faster computation than Hadoop MapReduce. I used to play with Spark, Akka, Camel setup within my [camel-spark](https://github.com/lachatak/camel-spark) project but now I wanted to use it together with Scalaz. 
+Recently I have had a little spare time to play around with [Spark](https://spark.apache.org/). It promisses not less than a 100x faster computation than Hadoop MapReduce. I used to play with Spark, Akka, Camel setup within my [camel-spark](https://github.com/lachatak/camel-spark) project but thanks to some initial brainstorm with [Kristof](https://twitter.com/kjozsa) now I wanted to use it again but now with Scalaz. 
 
-I am runnig a **Dev challenges** program with [Mate](http://tindaloscode.blogspot.co.uk/) at Gamesys to form a developer community and promote continous learning. The first challenge was about a big data aggregator application. The description can be found [here](https://github.com/lachatak/dev-challenges/blob/master/bigdataaggregator/CHALLENGE.md).
+I am runnig a **Dev Challenges** program with [Mate](http://tindaloscode.blogspot.co.uk/) at ***Gamesys*** to form a developer community and promote continous learning. The first challenge was about a big data aggregator application. The description can be found [here](https://github.com/lachatak/dev-challenges/blob/master/bigdataaggregator/CHALLENGE.md).
 The spark solution in this repository is a bit simplified version of my original solution and provides a good context to practice Scalaz and Scala concepts like **Reader** or **State** monad.
 
-There are two solutions here.
+There are two solutions in this project.
 - Spark with Scalaz' **Reader** monad. **Reader** monad is used as a kind of dependency injection solution. I believe this is a typical problem where you could harness its features.
-- Spark with Scalaz' **ReaderWriterState** monad. I use this monad for multiple purposes. **Reader** monad provides a frame for dependency injection, **Writer** helps to eliminate side effects of logging messages meanwhile **State** stores temporary results during the prcession.
+- Spark with Scalaz' **ReaderWriterState** monad. I use this monad for multiple purposes. **Reader** monad provides a frame for dependency injection, **Writer** helps to eliminate side effects of logging messages meanwhile **State** stores temporary results during the process flow.
 
-I won't explain the first solution as it is part of the second one. So let's turn our intention to the **ReaderWriterState** monad and it goodiness.
+I won't explain the first solution as it is part of the second one. You could explore it [here](https://github.com/lachatak/scalalearn/blob/master/sparkscalaz/src/main/scala/org/kaloz/SparkReader.scala). 
+So let's turn our intention to the **ReaderWriterState** monad and it goodiness.
 
 ### The Problem ###
-You would like to use Spark for a distributed computation. I simple and working solution for the requirements:
+You would like to use Spark for a distributed computation. A simple and working solution for the challenge requirements would be something like this:
 ```scala
   def process(targetCurrency: String) = {
     val sc = new SparkContext(new SparkConf().setAppName("challenge").setMaster("local[8]"))
@@ -132,7 +133,7 @@ Now we have the building blockes. Lets put those block together. This is the way
       s <- summaryByPartner(partner)
     } yield s
 ```
-Now we have a fully defined coputation. Dont forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
+Now we have a fully defined computation. Dont forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
 All we have left is to run it. First thing we need is a Spark context. The following method only accept a type Work. You cannot run anything with this which is not a type Work. Meanwhile the Work requires the context. Win-Win. So let's provide the context which only could run a Work:
 ```scala
   def runWithSpark[S, A](work: Work[S, A])(implicit S: Monoid[S]): (List[String], A, S) = {
@@ -158,7 +159,7 @@ There is a bit magic with the Monoid implicit which is required to be able to ch
 The rest is up to you how you use the results.
 
 ### Conclusions ###
-I believe that the **ReaderWriterState** monad is a really good tool worth playing around with.
+I believe that the **ReaderWriterState** monad is a really good tool worth playing around with. We addressed reusability and modularity. I stronly belive we achieved this. Any block can be used individually and can be conbined with the others to form bigger, more complex computations.
 I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though bear in mind ***YAGNI***!! 
 
 

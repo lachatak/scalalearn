@@ -54,14 +54,14 @@ You would like to use Spark for a distributed computation. A simple and working 
 I called **ReaderWriterState** monad from Scalaz to help me out.
 
 #### Reader monad part ####
-We would like to have a context and optionally we would like to reuse this context for multiple calculations. There is no point in opening and closing Spark context every time we need some disributed computation especially if those subsequent computations happen on the same context. We should be able chain them for the maximum efficiency. **Reader** monad gives us this freedom. You can easily define reusable building blockes for the computation which depends on some context which is here the Spark context itself. With this approach we could chain Spark computations using the same Spark context. All we have to do is defining individual building blocks, individual computations. Chaining the blocks just prvide the definition of the computation itself without really running it. It will happen when we finally call the **run** method of the **Reader** with a real Spark context. It will be inject to the computation itself and the defined building block will be executed.
+We would like to have a context and optionally we would like to reuse this context for multiple calculations. There is no point in opening and closing Spark context every time we need some disributed computation especially if those subsequent computations happen on the same context. We should be able chain them for the maximum efficiency. **Reader** monad gives us this freedom. You can easily define reusable building blocks for the computation which depends on some context which is here the Spark context itself. With this approach we could chain Spark computations using the same Spark context. All we have to do is defining individual building blocks, individual computations. Chaining the blocks just prvide the definition of the computation itself without really running it. It will happen when we finally call the **run** method of the **Reader** with a real Spark context. It will be inject to the computation itself and the defined building block will be executed.
 
 #### Writer monad part ####
 I wanted to have audit log about the computation. **Writer** monad collects all your log messages and makes it availble after the process has finished. You can do what ever you want with your logs later.
 
 #### State monad part ####
 I wanted to reuse intermediate results for later calculations. We could achieve this with a simple Reader monad as well but I believe **State** monad gives you more flexibility and options. A soon as you need some return value from one building block and you also would like to modify and reuse a previous calculation again you will find Reader monad more restrictive.
-So **State** provides means to mantain and propagat intermediate results to the next building block meanwhile **Reader** gives you always a predefined context what you can reuse again and again without being able to modify it. Effectively provides dependency injection.
+So **State** provides means to maintain and propagate intermediate results to the next building block meanwhile **Reader** gives you always a predefined context what you can reuse again and again without being able to modify it. Effectively provides dependency injection.
 
 #### ReaderWriterState monad ####
 **ReaderWriterState** monad gives us all the freedom we need to be able to combine computation working blocks together.
@@ -121,7 +121,7 @@ And finally the logging itself:
 ```
 It simply adds the incoming message the the audit log without touching the state and providing any results.
 
-Now we have the building blockes. Lets put those block together. This is the way how you could form bigger functions from dump elements:
+Now we have the building blocks. Lets put those block together. This is the way how you could form bigger functions from dump elements:
 ```scala
   def loadSummaryByCurrency(exchangerates: String = "exchangerates.csv", transactions: String = "transactions.csv", currency: String = "GBP", partner: String = "Unlimited ltd."): Work[Map[String, BigDecimal], BigDecimal] =
     for {
@@ -133,7 +133,7 @@ Now we have the building blockes. Lets put those block together. This is the way
       s <- summaryByPartner(partner)
     } yield s
 ```
-Now we have a fully defined computation. Dont forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
+Now we have a fully defined computation. Don't forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
 All we have left is to run it. First thing we need is a Spark context. The following method only accept a type of Work[S, A]. Meanwhile the Work requires the context to produce results. Win-Win. So let's provide the context which only could run a Work[S, A]:
 ```scala
   def runWithSpark[S, A](work: Work[S, A])(implicit S: Monoid[S]): (List[String], A, S) = {

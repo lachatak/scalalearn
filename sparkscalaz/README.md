@@ -14,7 +14,7 @@ I won't explain the first solution as it is part of the second one. So let's tur
 You would like to use Spark for a distributed computation. I simple and working solution for the requirements:
 ```scala
   def process(targetCurrency: String) = {
-    val sc = new SparkContext(new SparkConf().setAppName("challenge1").setMaster("local[2]"))
+    val sc = new SparkContext(new SparkConf().setAppName("challenge").setMaster("local[8]"))
 
     try {
       val results = parse(sc, targetCurrency)
@@ -118,7 +118,49 @@ And finally the logging itself:
   def log(message: String): Work[Map[String, BigDecimal], Unit] =
     ReaderWriterState((sc, state) => (message :: Nil, (), state))
 ```
-It simpli adds the incoming message the the audit log without touching the state and providing any results
+It simply adds the incoming message the the audit log without touching the state and providing any results.
+
+Now we have the building blockes. Lets put those block together. This is the way how you could form bigger functions from dump elements:
+```scala
+  def loadSummaryByCurrency(exchangerates: String = "exchangerates.csv", transactions: String = "transactions.csv", currency: String = "GBP", partner: String = "Unlimited ltd."): Work[Map[String, BigDecimal], BigDecimal] =
+    for {
+      _ <- log(s"Loading exchangerates from $exchangerates file!")
+      r <- rates(exchangerates, currency)
+      _ <- log(s"Calculating transaction summary from $transactions file!")
+      _ <- summaryByCurrency(transactions, currency, r)
+      _ <- log(s"Process done!")
+      s <- summaryByPartner(partner)
+    } yield s
+```
+Now we have a fully defined coputation. Dont forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
+All we have left is to run it. First thing we need is a Spark context. The following method only accept a type Work. You cannot run anything with this which is not a type Work. Meanwhile the Work requires the context. Win-Win. So let's provide the context which only could run a Work:
+```scala
+  def runWithSpark[S, A](work: Work[S, A])(implicit S: Monoid[S]): (List[String], A, S) = {
+
+    val sparkConf: SparkConf = new SparkConf()
+      .setAppName("readerWriterState")
+      .setMaster("local[8]")
+      .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
+
+    val sc = new SparkContext(sparkConf)
+
+    try {
+      work.run(sc, S.zero)
+    } finally {
+      sc.stop
+    }
+  }
+```
+There is a bit magic with the Monoid implicit which is required to be able to change the type of the state based on what type of work we have. As for us it will be a Map[String, BigDecimal] the implicit gives us an empty map to be able to kick start the computation. The Spark context is just defined inside the method and injected to the work. After this point our computation definition really starts to work and produces a result. As you can see it will be a triple. 
+- List of messages were generated during the process
+- The final computation result which is a BigDecimal now
+- The current state which is a Map with all the partners
+The rest is up to you how you use the results.
+
+### Conclusions ###
+I believe that the **ReaderWriterState** monad is a really good tool worth playing around with.
+I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though bear in mind YAGNI!! 
+
 
 
 

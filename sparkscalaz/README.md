@@ -92,7 +92,7 @@ Let's see how it looks like in the practice:
       (s"${rates.size} exchangerate(s) has been loaded.." :: Nil, rates, state)
     })
 ```
-We use the context here but we don't need the state. It just simple loads the exchange rates. I extracted the effective coputation part before the tiple as I wanted to log some results from the computation.
+We use the context here but we don't need the state. It just simple loads the exchange rates. I extracted the effective computation part before the triple returned as I wanted to log some results from the computation.
 ```scala
   def summaryByCurrency(transactions: String, currency: String, rates: Map[String, BigDecimal]): Work[Map[String, BigDecimal], Map[String, BigDecimal]] =
     ReaderWriterState((sc, state) => {
@@ -134,7 +134,7 @@ Now we have the building blockes. Lets put those block together. This is the way
     } yield s
 ```
 Now we have a fully defined computation. Dont forget it is just a definition nothing else. It gives back a unit of Work[S, A]. It means that the state has type Map[String, BigDecimal] meanwhile the result of the entire block will be a BigDecimal. Nice and easy.
-All we have left is to run it. First thing we need is a Spark context. The following method only accept a type Work. You cannot run anything with this which is not a type Work. Meanwhile the Work requires the context. Win-Win. So let's provide the context which only could run a Work:
+All we have left is to run it. First thing we need is a Spark context. The following method only accept a type of Work[S, A]. Meanwhile the Work requires the context to produce results. Win-Win. So let's provide the context which only could run a Work[S, A]:
 ```scala
   def runWithSpark[S, A](work: Work[S, A])(implicit S: Monoid[S]): (List[String], A, S) = {
 
@@ -152,15 +152,15 @@ All we have left is to run it. First thing we need is a Spark context. The follo
     }
   }
 ```
-There is a bit magic with the Monoid implicit which is required to be able to change the type of the state based on what type of work we have. As for us it will be a Map[String, BigDecimal] the implicit gives us an empty map to be able to kick start the computation. The Spark context is just defined inside the method and injected to the work. After this point our computation definition really starts to work and produces a result. As you can see it will be a triple. 
+There is a bit magic with the Monoid implicit which is required to be able to change the type of the state based on the type we have in the Work. As for us it will be a Map[String, BigDecimal] the implicit gives us an empty initial map to be able to kick start the computation. If the state were a List it would provide an empty List for us. If it were in Int in this case it would be 0. The Spark context is just defined inside the method and injected to the work. After this point our computation definition really starts to live and produces the sought-after result. As you can see it will be a triple. 
 - List of messages were generated during the process
 - The final computation result which is a BigDecimal now
-- The current state which is a Map with all the partners
-The rest is up to you how you use the results.
+- The current state which is a Map with all the partners and aggregated transaction amounts
+How you would like to use the results is up to you.
 
 ### Conclusions ###
-I believe that the **ReaderWriterState** monad is a really good tool worth playing around with. We addressed reusability and modularity. I stronly belive we achieved this. Any block can be used individually and can be conbined with the others to form bigger, more complex computations.
-I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though bear in mind ***YAGNI***!! 
+I believe that the **ReaderWriterState** monad is a really good tool which is worth playing around with. We addressed reusability and modularity. I stronly belive we achieved all of them. Any block can be used individually and can be combined with the others to form bigger, more complex computations.
+I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though, bear in mind ***YAGNI***!! 
 
 
 

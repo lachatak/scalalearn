@@ -49,23 +49,79 @@ You would like to use Spark for a distributed computation. I simple and working 
   - you need the result of aggregated data to do some extra calculations on it?
   This solution is just not provides freedom and flexibility. I know you have to focus on your current task and problem. I know [YAGNI](http://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it) as well but still. Could we provide better solution? I suppose yes.
 
-### ReaderWriterState monad ###
-**ReaderWriterState** monad gives us all the freedom we need to be able to combine working blocks together.
+### The solution ###
+I called **ReaderWriterState** monad from Scalaz to help me out.
 
-### Reader monad part ###
+#### Reader monad part ####
 We would like to have a context and optionally we would like to reuse this context for multiple calculations. There is no point in opening and closing Spark context every time we need some disributed computation especially if those subsequent computations happen on the same context. We should be able chain them for the maximum efficiency. **Reader** monad gives us this freedom. You can easily define reusable building blockes for the computation which depends on some context which is here the Spark context itself. With this approach we could chain Spark computations using the same Spark context. All we have to do is defining individual building blocks, individual computations. Chaining the blocks just prvide the definition of the computation itself without really running it. It will happen when we finally call the **run** method of the **Reader** with a real Spark context. It will be inject to the computation itself and the defined building block will be executed.
 
-### Writer monad part ###
+#### Writer monad part ####
 I wanted to have audit log about the computation. **Writer** monad collects all your log messages and makes it availble after the process has finished. You can do what ever you want with your logs later.
 
-### State monad part ###
+#### State monad part ####
 I wanted to reuse intermediate results for later calculations. We could achieve this with a simple Reader monad as well but I believe **State** monad gives you more flexibility and options. A soon as you need some return value from one building block and you also would like to modify and reuse a previous calculation again you will find Reader monad more restrictive.
 So **State** provides means to mantain and propagat intermediate results to the next building block meanwhile **Reader** gives you always a predefined context what you can reuse again and again without being able to modify it. Effectively provides dependency injection.
 
-How it looks like in code?
+#### ReaderWriterState monad ####
+**ReaderWriterState** monad gives us all the freedom we need to be able to combine computation working blocks together.
 
+How it looks like in code?
+I defined the following type:
 ```scala
+  type Work[S, A] = ReaderWriterState[SparkContext, List[String], S, A]
 ```
+Every working block should produce a Work[S, A] type response. What it says is the following:
+- Every computation depends on a Spark context
+- Every computation should contribute to the audit log with a list of messages
+- Every computation should maintain a state which has a type S
+- Every computation should provide some results
+Effectively you have to provide the following for every building blocks:
+```scala
+ReaderWriterState((SparkContext, S) =>(List[String], A, S))
+```
+Let's see how it looks like in the practice:
+```scala
+  def rates[S](exchangerates: String, currency: String): Work[S, Map[String, BigDecimal]] =
+    ReaderWriterState((sc, state) => {
+      val rates = sc.textFile(exchangerates)
+        .map(_.split(",").map(_.trim.toUpperCase))
+        .collect { case Array(from, to, amount) if (currency == to) => (from -> BigDecimal(amount))}
+        .collectAsMap()
+        .toMap
+      (s"${rates.size} exchangerate(s) has been loaded.." :: Nil, rates, state)
+    })
+```
+We use the context here but we don't need the state. It just simple loads the exchange rates. I extracted the effective coputation part before the tiple as I wanted to log some results from the computation.
+```scala
+  def summaryByCurrency(transactions: String, currency: String, rates: Map[String, BigDecimal]): Work[Map[String, BigDecimal], Map[String, BigDecimal]] =
+    ReaderWriterState((sc, state) => {
+      val result = sc.textFile(transactions)
+        .map(_.split(",").map(_.trim.toUpperCase))
+        .map { case Array(partner, to, amount) => (partner, rates.getOrElse(to, BigDecimal(0)) * BigDecimal(amount))}
+        .reduceByKey(_ + _)
+        .collectAsMap()
+        .toMap
+      (s"${result.size} partner(s) has been loaded.." :: Nil, result, result)
+    })
+```
+The same concept but here we save the computation result as a state meanwhile returning it as well. With this little twist every subsequent block will be able to use the incoming state part as well.
+```scala
+  def summaryByPartner(partner: String): Work[Map[String, BigDecimal], BigDecimal] =
+    ReaderWriterState((sc, state) => {
+      val result = state(partner.toUpperCase)
+      (s"Result for $partner has been fetched -> $result" :: Nil, result, state)
+    })
+```
+Here I am just using the state to fetch an amount belongs to a specific partner.
+And finally the logging itself:
+```scala
+  def log(message: String): Work[Map[String, BigDecimal], Unit] =
+    ReaderWriterState((sc, state) => (message :: Nil, (), state))
+```
+It simpli adds the incoming message the the audit log without touching the state and providing any results
+
+
+
 
 
   

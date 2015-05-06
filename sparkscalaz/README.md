@@ -159,7 +159,7 @@ The rest is up to you how you use the results.
 
 ### Conclusions ###
 I believe that the **ReaderWriterState** monad is a really good tool worth playing around with.
-I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though bear in mind YAGNI!! 
+I hope I managed to show you some interesting ideas about it and also persuaded you that sometime it is beneficial to look a bit farther than your actual task. Though bear in mind ***YAGNI***!! 
 
 
 

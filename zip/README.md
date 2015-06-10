@@ -1,5 +1,5 @@
 ## Zip Decimals ##
-I have encountered recently this zip problem. I provided a simple solution for this. To be honest not the solution itself but the fact that how smooth you can work with scala and java together in the very same project.
+I have encountered recently the following zip problem. I provided a simple solution for this. To be honest not the solution itself but the fact that how smooth you can integrate scala and java together in the very same project. Here just for testing purpose but it still shows its efficiency. The other reason for this post is the fact that I have just rediscovered how good is the property based testing :)
 
 ### Rules ###
 Given 2 decimals between 0 and 10.000.000 call them A and B. Zip the 2 decimals to C applying the following rules:
@@ -12,6 +12,7 @@ Given 2 decimals between 0 and 10.000.000 call them A and B. Zip the 2 decimals 
 
 ### Examples ###
 A = 123, B = 20 => C = 12203
+
 A = 12345, B = 1 => C = 112345
 
 ## Property based testing ##

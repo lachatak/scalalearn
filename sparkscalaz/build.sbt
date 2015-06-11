@@ -8,7 +8,7 @@ scalaVersion := "2.11.4"
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
-javacOptions ++= Seq("-Xlint:deprecation", "-encoding", "utf8", "-XX:MaxPermSize=256M")
+javacOptions ++= Seq("-Xlint:deprecation", "-encoding", "utf8")
 
 mainClass in assembly := Some("org.kaloz.SparkReaderWriterState")
 

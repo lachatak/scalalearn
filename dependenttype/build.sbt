@@ -1,4 +1,4 @@
-name := "dependenttype-test"
+name := "dependenttypes"
 
 organization := "org.kaloz"
 

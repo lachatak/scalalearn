@@ -1,10 +1,10 @@
-name := "scalalearn"
+name := "scalaz"
 
 organization := "org.kaloz"
 
 version := "1.0.0"
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.11.8"
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 

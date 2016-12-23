@@ -1,4 +1,4 @@
-name := "sparkreader"
+name := "sparkscalaz"
 
 organization := "org.kaloz"
 

@@ -1,7 +1,5 @@
 package org.kaloz
 
-import org.apache.spark.SparkContext
-
 import scalaz._
 import Scalaz._
 

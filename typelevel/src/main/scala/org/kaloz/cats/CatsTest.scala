@@ -50,42 +50,42 @@ object CatsTest extends App {
 
 
 }
-
-package object domain {
-
-  trait Domain
-
-  abstract class DomainError(val message: String, val throwable: Option[Throwable] = None)
-
-  type DomainObject[A <: Domain] = Either[DomainError, A]
-
-  type DomainTask[A <: Domain] = Task[DomainObject[A]]
-
-  type DomainT[A <: Domain] = EitherT[Task, DomainError, A]
-
-  object DomainT {
-    def apply[A <: Domain](f: DomainTask[A]): DomainT[A] = EitherT[Task, DomainError, A](f)
-
-    def fromDomainObject[A <: Domain](f: DomainObject[A]): DomainT[A] = fromEither(f)
-
-    def fromDomainValue[A <: Domain](f: A): DomainT[A] = EitherT.pure[Task, DomainError, A](f)
-
-    def fromTask[A <: Domain](f: Task[A]): DomainT[A] = EitherT.liftT[Task, DomainError, A](f)
-
-    def fromEither[A <: Domain](f: DomainObject[A]): DomainT[A] = EitherT.fromEither[Task](f)
-
-    def fromOption[A <: Domain](f: Option[A], e: DomainError): DomainT[A] = EitherT.fromOption[Task](f, e)
-
-    def fromTry[A <: Domain](f: Try[A], e: DomainError): DomainT[A] = fromOption(f.toOption, e)
-
-  }
-
-}
-
-object MonadTransformers extends App {
-
-
-
-}
+//
+//package object domain {
+//
+//  trait Domain
+//
+//  abstract class DomainError(val message: String, val throwable: Option[Throwable] = None)
+//
+//  type DomainObject[A <: Domain] = Either[DomainError, A]
+//
+//  type DomainTask[A <: Domain] = Task[DomainObject[A]]
+//
+//  type DomainT[A <: Domain] = EitherT[Task, DomainError, A]
+//
+//  object DomainT {
+//    def apply[A <: Domain](f: DomainTask[A]): DomainT[A] = EitherT[Task, DomainError, A](f)
+//
+//    def fromDomainObject[A <: Domain](f: DomainObject[A]): DomainT[A] = fromEither(f)
+//
+//    def fromDomainValue[A <: Domain](f: A): DomainT[A] = EitherT.pure[Task, DomainError, A](f)
+//
+//    def fromTask[A <: Domain](f: Task[A]): DomainT[A] = EitherT.liftT[Task, DomainError, A](f)
+//
+//    def fromEither[A <: Domain](f: DomainObject[A]): DomainT[A] = EitherT.fromEither[Task](f)
+//
+//    def fromOption[A <: Domain](f: Option[A], e: DomainError): DomainT[A] = EitherT.fromOption[Task](f, e)
+//
+//    def fromTry[A <: Domain](f: Try[A], e: DomainError): DomainT[A] = fromOption(f.toOption, e)
+//
+//  }
+//
+//}
+//
+//object MonadTransformers extends App {
+//
+//
+//
+//}
 
 

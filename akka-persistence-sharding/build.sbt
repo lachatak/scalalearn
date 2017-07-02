@@ -22,6 +22,9 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-persistence-query" % "2.5.3",
   "com.typesafe.akka" %% "akka-slf4j" % "2.5.3",
   "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.54",
+  "com.typesafe.akka" %% "akka-cluster" % "2.5.3",
+  "com.typesafe.akka" %% "akka-cluster-sharding" % "2.5.3",
+  "com.typesafe.akka" %% "akka-cluster-tools" % "2.5.3",
   "ch.qos.logback" % "logback-classic" % "1.2.3",
   "ch.qos.logback" % "logback-core" % "1.2.3",
   "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.54" % Test

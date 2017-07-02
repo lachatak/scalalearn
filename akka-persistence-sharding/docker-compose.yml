@@ -29,6 +29,8 @@ services:
     image: cassandra
     volumes:
       - ./datadir:/var/lib/cassandra
+    environment:
+      - CASSANDRA_DC=datacenter1
     ports:
       - "7000:7000"
       - "7001:7001"

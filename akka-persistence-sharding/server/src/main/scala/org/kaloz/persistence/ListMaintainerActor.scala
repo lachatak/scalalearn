@@ -3,14 +3,10 @@ package org.kaloz.persistence
 import java.util.UUID
 
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, ReceiveTimeout, Terminated}
-import akka.cluster.Cluster
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, ReceiveTimeout}
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import akka.event.{Logging, LoggingAdapter}
 import akka.persistence.AtLeastOnceDelivery.AtLeastOnceDeliverySnapshot
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor, RecoveryCompleted, SnapshotOffer}
-import com.typesafe.config.ConfigFactory
 import org.kaloz.persistence.ListItemPrinterActor.PrintListItemCommand
 import org.kaloz.persistence.ListMaintainerActor.{AddItemCommand, AddItemInitiatedEvent, DeliveryStateSnapshot, ItemAddedEvent, ListState, PrintConfirmedEvent}
 
@@ -142,94 +138,4 @@ object ListItemPrinterActor {
   case class PrintListItemCommand(deliveryId: Long, id: String, data: String) extends Command
 
   def props() = Props[ListItemPrinterActor]
-}
-
-object ListMaintainerActorMain extends App {
-
-  startup(Seq("2551", "2552"))
-
-  def startup(ports: Seq[String]): Unit = {
-    ports.foreach { port =>
-
-      val config = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + port)
-        .withFallback(ConfigFactory.load())
-
-      val system = ActorSystem("ClusterSystem", config)
-
-      val listItemPrinterActor = system.actorOf(ListItemPrinterActor.props())
-
-      ClusterSharding(system).start(
-        typeName = ListMaintainerActor.shardName,
-        entityProps = ListMaintainerActor.props(listItemPrinterActor),
-        settings = ClusterShardingSettings(system),
-        messageExtractor = ListMaintainerActor.messageExtractor(10)
-      )
-    }
-  }
-}
-
-object SendMain extends App {
-
-  val config = ConfigFactory.parseString("akka.remote.netty.tcp.port=2553")
-    .withFallback(ConfigFactory.load())
-
-  val system = ActorSystem("ClusterSystem", config)
-
-  val listItemPrinterActor = system.actorOf(ListItemPrinterActor.props())
-
-  ClusterSharding(system).start(
-    typeName = ListMaintainerActor.shardName,
-    entityProps = ListMaintainerActor.props(listItemPrinterActor),
-    settings = ClusterShardingSettings(system),
-    messageExtractor = ListMaintainerActor.messageExtractor(10)
-  )
-
-  val cluster = Cluster(system)
-  val listMaintainerRegion: ActorRef = ClusterSharding(system).shardRegion(ListMaintainerActor.shardName)
-
-  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "foo")
-  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "bar")
-
-  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list2", "foo")
-
-  Thread.sleep(10000)
-
-  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "foo2")
-
-  Thread.sleep(1000)
-
-
-  system.actorOf(Props(new Actor with ActorLogging {
-    context.watch(listMaintainerRegion)
-
-    def receive = {
-      case Terminated(listMaintainerRegion) =>
-        log.info(s"Terminated $listMaintainerRegion")
-        cluster.registerOnMemberRemoved(context.system.terminate())
-        cluster.leave(cluster.selfAddress)
-    }
-  }))
-
-  listMaintainerRegion ! ShardRegion.GracefulShutdown
-}
-
-object PersistenceQueryMain extends App {
-
-  import akka.NotUsed
-  import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-  import akka.persistence.query.{EventEnvelope, PersistenceQuery}
-  import akka.stream.ActorMaterializer
-  import akka.stream.scaladsl.Source
-
-  val system = ActorSystem("ClusterSystem")
-  val log: LoggingAdapter = Logging.getLogger(system, this)
-
-  implicit val mat = ActorMaterializer()(system)
-  val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](
-    CassandraReadJournal.Identifier
-  )
-
-  val evts: Source[EventEnvelope, NotUsed] = queries.eventsByPersistenceId("List-list1", 0, Long.MaxValue)
-
-  evts.runForeach { evt => log.info(s"Event: $evt") }
 }

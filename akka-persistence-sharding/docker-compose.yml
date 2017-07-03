@@ -1,29 +1,41 @@
 version: '2'
 
 services:
-  server1:
-    image: relateiq/oracle-java8
-    volumes:
-      - ./shared:/shared
-    environment:
-      - LOOPBACK=localhost
-    entrypoint:
-      - /bin/sh
-      - ./shared/start.sh
+  seed:
+    image: lachatak/server:1.0.0
+    depends_on:
+      - cassandra
     ports:
-      - '8000:8000'
-
-  server2:
-    image: relateiq/oracle-java8
-    volumes:
-      - ./shared:/shared
+      - '1600:1600'
     environment:
-      - LOOPBACK=localhost
-    entrypoint:
-      - /bin/sh
-      - ./shared/start.sh
+      CLUSTER_PORT: 1600
+      CLUSTER_IP: seed
+      SEED_PORT_1600_TCP_ADDR: seed
+      CASSANDRA_IP: cassandra
+  s1:
+    image: lachatak/server:1.0.0
+    depends_on:
+      - cassandra
+      - seed
     ports:
-      - '8000:8000'
+      - '1601:1601'
+    environment:
+      CLUSTER_PORT: 1601
+      CLUSTER_IP: s1
+      SEED_PORT_1600_TCP_ADDR: seed
+      CASSANDRA_IP: cassandra
+  s2:
+    image: lachatak/server:1.0.0
+    depends_on:
+      - cassandra
+      - seed
+    ports:
+      - '1602:1602'
+    environment:
+      CLUSTER_PORT: 1602
+      CLUSTER_IP: s2
+      SEED_PORT_1600_TCP_ADDR: seed
+      CASSANDRA_IP: cassandra
 
   cassandra:
     image: cassandra

@@ -1,15 +1,18 @@
 package org.kaloz.persistence
 
+import java.util.UUID
+
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.{Actor, ActorRef, ActorSystem, Props, ReceiveTimeout, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, ReceiveTimeout, Terminated}
 import akka.cluster.Cluster
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import akka.event.{Logging, LoggingAdapter}
 import akka.persistence.AtLeastOnceDelivery.AtLeastOnceDeliverySnapshot
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor, RecoveryCompleted, SnapshotOffer}
 import com.typesafe.config.ConfigFactory
 import org.kaloz.persistence.ListItemPrinterActor.PrintListItemCommand
-import org.kaloz.persistence.ListMaintainerActor.{AddItemCommand, ConfirmPrinted, DeliveryStateSnapshot, ItemAddedEvent, ItemPrintedEvent, ListState}
+import org.kaloz.persistence.ListMaintainerActor.{AddItemCommand, AddItemInitiatedEvent, DeliveryStateSnapshot, ItemAddedEvent, ListState, PrintConfirmedEvent}
 
 import scala.concurrent.duration._
 
@@ -17,7 +20,7 @@ sealed trait Command
 
 sealed trait Event
 
-class ListMaintainerActor(listItemPrinterActor: ActorRef) extends PersistentActor with AtLeastOnceDelivery {
+class ListMaintainerActor(listItemPrinterActor: ActorRef) extends PersistentActor with AtLeastOnceDelivery with ActorLogging {
 
   context.setReceiveTimeout(5.seconds)
 
@@ -26,36 +29,43 @@ class ListMaintainerActor(listItemPrinterActor: ActorRef) extends PersistentActo
   var state = ListState()
 
   def updateState(event: Event): Unit = event match {
-    case ItemAddedEvent(id, data) =>
+    case AddItemInitiatedEvent(commandId, id, data) =>
+      state = state.processingCommand(commandId)
       deliver(listItemPrinterActor.path)(deliveryId => PrintListItemCommand(deliveryId, id, data))
-    case l@ItemPrintedEvent(deliveryId, id, data) =>
+    case l@ItemAddedEvent(deliveryId, id, data) =>
       confirmDelivery(deliveryId)
-      println(s"ListItemPrintedEvent --> $l")
+      log.info(s"ListItemPrintedEvent --> $l")
       state = state.updated(data)
       val snapshot = DeliveryStateSnapshot(state, getDeliverySnapshot)
       saveSnapshot(snapshot)
-      println(s"Snapshot saved --> $snapshot")
+      log.info(s"Snapshot saved --> $snapshot")
   }
 
   val receiveRecover: Receive = {
     case evt: Event =>
-      println(s"Recover with $evt")
+      log.info(s"Recover with $evt")
       updateState(evt)
     case SnapshotOffer(_, d@DeliveryStateSnapshot(snapshot, alodSnapshot)) =>
-      println(s"SnapshotOffered with $d")
+      log.info(s"SnapshotOffered with $d")
       setDeliverySnapshot(alodSnapshot)
       state = snapshot
-    case RecoveryCompleted => println("RecoveryCompleted")
+    case RecoveryCompleted => log.info("RecoveryCompleted")
   }
 
   val receiveCommand: Receive = {
-    case AddItemCommand(id, data) => persist(ItemAddedEvent(id, data))(updateState)
-    case ConfirmPrinted(deliveryId, id, data) => persist(ItemPrintedEvent(deliveryId, id, data))(updateState)
-    case AtLeastOnceDelivery.UnconfirmedWarning(deliveries) => println(s"UnconfirmedWarning $deliveries!!")
+    case AddItemCommand(commandId, id, data) =>
+      if (!state.isCommandIdProcessed(commandId)) {
+        persist(AddItemInitiatedEvent(commandId, id, data))(updateState)
+      }
+      else {
+        log.info(s"$commandId is processed!")
+      }
+    case PrintConfirmedEvent(deliveryId, id, data) => persist(ItemAddedEvent(deliveryId, id, data))(updateState)
+    case AtLeastOnceDelivery.UnconfirmedWarning(deliveries) => log.info(s"UnconfirmedWarning $deliveries!!")
     //Passivate
     case ReceiveTimeout => context.parent ! Passivate(stopMessage = Stop)
     case Stop =>
-      println(s"$persistenceId is stopping...")
+      log.info(s"$persistenceId is stopping...")
       context.stop(self)
   }
 
@@ -63,16 +73,21 @@ class ListMaintainerActor(listItemPrinterActor: ActorRef) extends PersistentActo
 
 object ListMaintainerActor {
 
-  case class AddItemCommand(id: String, item: String) extends Command
+  case class AddItemCommand(commandId: UUID, id: String, item: String) extends Command
 
-  case class ConfirmPrinted(deliveryId: Long, id: String, item: String) extends Command
+  case class AddItemInitiatedEvent(commandId: UUID, id: String, item: String) extends Event
 
-  case class ItemAddedEvent(id: String, item: String) extends Event
+  case class PrintConfirmedEvent(deliveryId: Long, id: String, item: String) extends Event
 
-  case class ItemPrintedEvent(deliveryId: Long, id: String, item: String) extends Event
+  case class ItemAddedEvent(deliveryId: Long, id: String, item: String) extends Event
 
-  case class ListState(items: List[String] = Nil) {
-    def updated(item: String): ListState = copy(item :: items)
+  case class ListState(commandIds: List[UUID] = Nil, items: List[String] = Nil) {
+
+    def updated(item: String): ListState = copy(items = item :: items)
+
+    def processingCommand(commandId: UUID): ListState = copy(commandIds = commandId :: commandIds)
+
+    def isCommandIdProcessed(commandId: UUID) = commandIds.contains(commandId)
 
     def size: Int = items.length
 
@@ -92,32 +107,32 @@ object ListMaintainerActor {
 
     // id extractor
     override def entityId(message: Any): String = message match {
-      case AddItemCommand(id, _) => id.toString
+      case AddItemCommand(_, id, _) => id.toString
     }
 
     // shard resolver
     override def shardId(message: Any): String = message match {
-      case AddItemCommand(id, _) => (id.hashCode % numberOfShards).toString
+      case AddItemCommand(_, id, _) => (id.hashCode % numberOfShards).toString
     }
 
     // get message
     override def entityMessage(message: Any): Any = message match {
-      case msg@AddItemCommand(_, _) => msg
+      case msg@AddItemCommand(_, _, _) => msg
     }
   }
 
   def props(target: ActorRef) = Props(new ListMaintainerActor(target))
 }
 
-class ListItemPrinterActor extends Actor {
+class ListItemPrinterActor extends Actor with ActorLogging {
 
   override def receive = {
     case PrintListItemCommand(deliveryId, id, data) =>
       //      if (data.startsWith("foo")) {
-      println(s"CONFIRMING!! $deliveryId for $id was delivered with value $data!")
-      sender() ! ConfirmPrinted(deliveryId, id, data)
+      log.info(s"CONFIRMING!! $deliveryId for $id was delivered with value $data!")
+      sender() ! PrintConfirmedEvent(deliveryId, id, data)
     //      } else {
-    //        println(s"NOT CONFIRMING !! $deliveryId was delivered with value $data!")
+    //        log.info(s"NOT CONFIRMING !! $deliveryId was delivered with value $data!")
     //      }
   }
 }
@@ -172,24 +187,24 @@ object SendMain extends App {
   val cluster = Cluster(system)
   val listMaintainerRegion: ActorRef = ClusterSharding(system).shardRegion(ListMaintainerActor.shardName)
 
-  listMaintainerRegion ! AddItemCommand("list1", "foo")
-  listMaintainerRegion ! AddItemCommand("list1", "bar")
+  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "foo")
+  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "bar")
 
-  listMaintainerRegion ! AddItemCommand("list2", "foo")
+  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list2", "foo")
 
   Thread.sleep(10000)
 
-  listMaintainerRegion ! AddItemCommand("list1", "foo2")
+  listMaintainerRegion ! AddItemCommand(UUID.randomUUID(), "list1", "foo2")
 
   Thread.sleep(1000)
 
 
-  system.actorOf(Props(new Actor {
+  system.actorOf(Props(new Actor with ActorLogging {
     context.watch(listMaintainerRegion)
 
     def receive = {
       case Terminated(listMaintainerRegion) =>
-        println(s"Terminated $listMaintainerRegion")
+        log.info(s"Terminated $listMaintainerRegion")
         cluster.registerOnMemberRemoved(context.system.terminate())
         cluster.leave(cluster.selfAddress)
     }
@@ -207,6 +222,7 @@ object PersistenceQueryMain extends App {
   import akka.stream.scaladsl.Source
 
   val system = ActorSystem("ClusterSystem")
+  val log: LoggingAdapter = Logging.getLogger(system, this)
 
   implicit val mat = ActorMaterializer()(system)
   val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](
@@ -215,5 +231,5 @@ object PersistenceQueryMain extends App {
 
   val evts: Source[EventEnvelope, NotUsed] = queries.eventsByPersistenceId("List-list1", 0, Long.MaxValue)
 
-  evts.runForeach { evt => println(s"Event: $evt") }
+  evts.runForeach { evt => log.info(s"Event: $evt") }
 }

@@ -20,7 +20,7 @@ object PersistenceQueryMain extends App {
     CassandraReadJournal.Identifier
   )
 
-  val evts: Source[EventEnvelope, NotUsed] = queries.eventsByPersistenceId("List-list1", 0, Long.MaxValue)
+  val evts: Source[EventEnvelope, NotUsed] = queries.eventsByPersistenceId("Payment-list1", 0, Long.MaxValue)
 
   evts.runForeach { evt => log.info(s"Event: $evt") }
 }

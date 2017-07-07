@@ -186,19 +186,11 @@ object BraintreePaymentActor {
 
     // id extractor
     override def entityId(message: Any): String = message match {
-//      case g@GetPaymentTokenCommand(_) => g.orderId.toString
-//      case a@AssignPaymentTokenCommand(_, _) => a.orderId.toString
-//      case e@ExecuteTransactionCommand(_, _) => e.orderId.toString
-//      case p@ProcessExecutionResultCommand(_, _) => p.orderId.toString
       case c:Command => c.orderId.toString
     }
 
     // shard resolver
     override def shardId(message: Any): String = message match {
-//      case g@GetPaymentTokenCommand(_) => (g.orderId.hashCode % numberOfShards).toString
-//      case a@AssignPaymentTokenCommand(_, _) => (a.orderId.hashCode % numberOfShards).toString
-//      case e@ExecuteTransactionCommand(_, _) => (e.orderId.hashCode % numberOfShards).toString
-//      case p@ProcessExecutionResultCommand(_, _) => (p.orderId.hashCode % numberOfShards).toString
       case c:Command => (c.orderId.hashCode % numberOfShards).toString
     }
 

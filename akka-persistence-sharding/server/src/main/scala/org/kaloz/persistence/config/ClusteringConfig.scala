@@ -6,5 +6,6 @@ object ClusteringConfig {
   private val config = ConfigFactory.load()
 
   val clusterName = config.getString("clustering.cluster.name")
+  val port = config.getInt("clustering.port")
 
 }

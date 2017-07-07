@@ -6,7 +6,7 @@ object Version {
   val cats            = "0.9.0"
   val akka            = "2.5.3"
   val akkaPCassandra  = "0.54"
-//  val akkaHttp      = "1.0"
+  val akkaHttp        = "10.0.9"
   val scalaLogging    = "3.6.0"
   val logBack         = "1.2.3"
   val mockito         = "1.10.19"
@@ -23,7 +23,7 @@ object Library {
   val akkaSharding           = "com.typesafe.akka"           %% "akka-cluster-sharding"                 % Version.akka
   val akkaSlf4j              = "com.typesafe.akka"           %% "akka-slf4j"                            % Version.akka
   val akkapCassandra         = "com.typesafe.akka"           %% "akka-persistence-cassandra"            % Version.akkaPCassandra
-//  val akkaHttp             = "com.typesafe.akka"           %% "akka-http-experimental"                % Version.akkaHttp
+  val akkaHttp               = "com.typesafe.akka"           %% "akka-http"                             % Version.akkaHttp
   val scalaLogging           = "com.typesafe.scala-logging"  %% "scala-logging"                         % Version.scalaLogging
   val logBackClassic         = "ch.qos.logback"              %  "logback-classic"                       % Version.logBack
   val logBackCore            = "ch.qos.logback"              %  "logback-core"                          % Version.logBack
@@ -46,6 +46,7 @@ object Dependencies {
     akkaPQuery,
     akkaCluster,
     akkaClusterTools,
+    akkaHttp,
     akkaSharding,
     akkaSlf4j,
     scalaLogging,

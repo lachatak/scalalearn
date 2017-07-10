@@ -4,19 +4,24 @@ import java.util.UUID
 
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Props, ReceiveTimeout}
+import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.HttpRequest
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
-import org.kaloz.persistence.BraintreePaymentActor.{AssignPaymentTokenCommand, ExecuteTransactionCommand, Executed, Executing, ExecutionFinishedEvent, ExecutionFinishedState, ExecutionStartedEvent, ExecutionStartedState, GetPaymentTokenCommand, PAID, PaymentState, PaymentTimedOutEvent, PaymentToken, PaymentTokenAssignedEvent, PaymentTokenRequestedEvent, ProcessExecutionResultCommand, TimedOut, TransactionExecuted, Uninitialised, UninitialisedPaymentState, WaitingForExecution, WaitingForExecutionState, WaitingForTokenState, WaitingForToken}
+import org.kaloz.persistence.BraintreePaymentActor.{AssignPaymentTokenCommand, ExecuteTransactionCommand, Executed, Executing, ExecutionFinishedEvent, ExecutionFinishedState, ExecutionStartedEvent, ExecutionStartedState, GetPaymentTokenCommand, PAID, PaymentState, PaymentTimedOutEvent, PaymentToken, PaymentTokenAssignedEvent, PaymentTokenRequestedEvent, ProcessExecutionResultCommand, TimedOut, TransactionExecuted, Uninitialised, UninitialisedPaymentState, WaitingForExecution, WaitingForExecutionState, WaitingForToken, WaitingForTokenState}
 import org.kaloz.persistence.BrainttreeClientActor.{ExecuteTransaction, GetBraintreeToken}
 
 import scala.concurrent.duration._
 import scala.reflect.{ClassTag, _}
+import akka.pattern.pipe
+import akka.stream.ActorMaterializer
 
 class BraintreePaymentActor(brainttreeClientActor: ActorRef)
   extends PersistentFSM[BraintreePaymentActor.PaymentFSMState, BraintreePaymentActor.PaymentState, BraintreePaymentActor.Event] with ActorLogging {
 
-  context.setReceiveTimeout(1 minute)
+  context.setReceiveTimeout(2 minute)
 
   override def persistenceId = "braintree-payment-" + self.path.name
 
@@ -57,7 +62,7 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef)
   when(WaitingForToken) {
     case Event(AssignPaymentTokenCommand(orderId, token), WaitingForTokenState(_, requester)) =>
       requester ! PaymentToken(token)
-      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax(20 second) //TIMEOUT for EXECUTION CALL
+      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax(60 second) //TIMEOUT for EXECUTION CALL
   }
 
   when(WaitingForExecution) {
@@ -191,7 +196,8 @@ object BraintreePaymentActor {
 
     // shard resolver
     override def shardId(message: Any): String = message match {
-      case c:Command => (c.orderId.hashCode % numberOfShards).toString
+      case c:Command => (c.orderId.toLong % numberOfShards).toString
+      case ShardRegion.StartEntity(id) => (id.toLong % numberOfShards).toString
     }
 
     // get message
@@ -205,14 +211,20 @@ object BraintreePaymentActor {
 
 class BrainttreeClientActor extends Actor with ActorLogging {
 
+  implicit val system = context.system
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = system.dispatcher
+
   override def receive = {
     case GetBraintreeToken(orderId) =>
       log.info(s"Client -> Get braintree TOKEN for $orderId")
-      sender() ! AssignPaymentTokenCommand(orderId, UUID.randomUUID())
+      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
+        .map(_ => AssignPaymentTokenCommand(orderId, UUID.randomUUID())) pipeTo sender()
 
     case ExecuteTransaction(orderId, amount: Long) =>
       log.info(s"Client -> Execute transaction for $orderId with $amount")
-      sender() ! ProcessExecutionResultCommand(orderId, UUID.randomUUID())
+      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
+        .map(_ => ProcessExecutionResultCommand(orderId, UUID.randomUUID())) pipeTo sender()
   }
 }
 

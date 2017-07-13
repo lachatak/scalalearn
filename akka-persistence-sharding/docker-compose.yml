@@ -5,6 +5,7 @@ services:
     image: lachatak/server:1.0.0
     depends_on:
       - cassandra
+      - kafka
     ports:
       - '1600:1600'
       - '8080:8080'
@@ -13,11 +14,14 @@ services:
       CLUSTER_IP: seed
       SEED_PORT_1600_TCP_ADDR: seed
       CASSANDRA_IP: cassandra
+      KAFKA_IP: kafka
+
   s1:
     image: lachatak/server:1.0.0
     depends_on:
       - cassandra
       - seed
+      - kafka
     ports:
       - '1601:1601'
     environment:
@@ -25,11 +29,14 @@ services:
       CLUSTER_IP: s1
       SEED_PORT_1600_TCP_ADDR: seed
       CASSANDRA_IP: cassandra
+      KAFKA_IP: kafka
+
   s2:
     image: lachatak/server:1.0.0
     depends_on:
       - cassandra
       - seed
+      - kafka
     ports:
       - '1602:1602'
     environment:
@@ -37,6 +44,7 @@ services:
       CLUSTER_IP: s2
       SEED_PORT_1600_TCP_ADDR: seed
       CASSANDRA_IP: cassandra
+      KAFKA_IP: kafka
 
   cassandra:
     image: cassandra
@@ -50,3 +58,27 @@ services:
       - "7199:7199"
       - "9042:9042"
       - "9160:9160"
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+#      - "1099:1099"
+    hostname: kafka
+    environment:
+      KAFKA_LOG_DIRS: /kafka
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_CREATE_TOPICS: "test:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.rmi.port=1099"
+#      JMX_PORT: 1099
+    volumes:
+      - ./server/kafka:/kafka

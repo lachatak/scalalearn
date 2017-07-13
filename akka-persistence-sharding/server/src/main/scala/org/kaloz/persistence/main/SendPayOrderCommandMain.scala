@@ -6,7 +6,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Terminated
 import akka.cluster.Cluster
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import org.kaloz.persistence.BraintreePaymentActor._
-import org.kaloz.persistence.{BrainttreeClientActor, BraintreePaymentActor}
+import org.kaloz.persistence.{BraintreePaymentActor, BrainttreeClientActor, EventPublisherActor}
 
 object SendPayOrderCommandMain extends App {
 
@@ -14,11 +14,12 @@ object SendPayOrderCommandMain extends App {
 
   val system = ActorSystem(clusterName)
 
-  val listItemPrinterActor = system.actorOf(BrainttreeClientActor.props())
+  val brainttreeClientActor = system.actorOf(BrainttreeClientActor.props())
+  val eventPublisherActor = system.actorOf(EventPublisherActor.props(kafkaIp))
 
   ClusterSharding(system).start(
     typeName = BraintreePaymentActor.shardName,
-    entityProps = BraintreePaymentActor.props(listItemPrinterActor),
+    entityProps = BraintreePaymentActor.props(brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
     messageExtractor = BraintreePaymentActor.messageExtractor(10)
   )

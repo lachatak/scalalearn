@@ -3,22 +3,30 @@ package org.kaloz.persistence
 import java.util.UUID
 
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Props, ReceiveTimeout}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, FSM, Props, ReceiveTimeout}
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
+import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpRequest
+import akka.kafka.ProducerSettings
+import akka.kafka.scaladsl.Producer
+import akka.pattern.pipe
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Keep, Source}
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.kaloz.persistence.BraintreePaymentActor.{AssignPaymentTokenCommand, ExecuteTransactionCommand, Executed, Executing, ExecutionFinishedEvent, ExecutionFinishedState, ExecutionStartedEvent, ExecutionStartedState, GetPaymentTokenCommand, PAID, PaymentState, PaymentTimedOutEvent, PaymentToken, PaymentTokenAssignedEvent, PaymentTokenRequestedEvent, ProcessExecutionResultCommand, TimedOut, TransactionExecuted, Uninitialised, UninitialisedPaymentState, WaitingForExecution, WaitingForExecutionState, WaitingForToken, WaitingForTokenState}
 import org.kaloz.persistence.BrainttreeClientActor.{ExecuteTransaction, GetBraintreeToken}
+import org.kaloz.persistence.config.ClusteringConfig.clusterName
 
 import scala.concurrent.duration._
 import scala.reflect.{ClassTag, _}
-import akka.pattern.pipe
-import akka.stream.ActorMaterializer
+import scala.util.{Failure, Success}
 
-class BraintreePaymentActor(brainttreeClientActor: ActorRef)
+class BraintreePaymentActor(brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef)
   extends PersistentFSM[BraintreePaymentActor.PaymentFSMState, BraintreePaymentActor.PaymentState, BraintreePaymentActor.Event] with ActorLogging {
 
   context.setReceiveTimeout(2 minute)
@@ -56,26 +64,30 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef)
   when(Uninitialised) {
     case Event(g@GetPaymentTokenCommand(orderId), _) =>
       brainttreeClientActor ! GetBraintreeToken(orderId)
-      goto(WaitingForToken) applying PaymentTokenRequestedEvent(orderId, sender()) forMax(5 second) //TIMEOUT for the external call
+      goto(WaitingForToken) applying PaymentTokenRequestedEvent(orderId, sender()) forMax (5 second) //TIMEOUT for the external call
   }
 
   when(WaitingForToken) {
     case Event(AssignPaymentTokenCommand(orderId, token), WaitingForTokenState(_, requester)) =>
       requester ! PaymentToken(token)
-      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax(60 second) //TIMEOUT for EXECUTION CALL
+      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax (60 second) //TIMEOUT for EXECUTION CALL
   }
 
   when(WaitingForExecution) {
     case Event(ExecuteTransactionCommand(orderId, orderItems), _) =>
       brainttreeClientActor ! ExecuteTransaction(orderId, orderItems.map(_.amount).sum)
-      goto(Executing) applying ExecutionStartedEvent(orderId, orderItems, sender()) forMax(5 second) //TIMEOUT for the external call
+      goto(Executing) applying ExecutionStartedEvent(orderId, orderItems, sender()) forMax (5 second) //TIMEOUT for the external call
   }
 
   when(Executing) {
     case Event(ProcessExecutionResultCommand(orderId, referenceId), ExecutionStartedState(_, _, _, requester)) =>
       requester ! TransactionExecuted(referenceId)
       context.parent ! Passivate(stopMessage = Stop)
-      goto(Executed) applying ExecutionFinishedEvent(orderId, referenceId)
+      val event = ExecutionFinishedEvent(orderId, referenceId)
+      goto(Executed) applying event andThen {
+        case _: ExecutionFinishedState =>
+          eventPublisherActor ! event
+      }
   }
 
   when(Executed)(FSM.NullFunction)
@@ -87,7 +99,7 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef)
       context.parent ! Passivate(stopMessage = Stop)
       log.warning(s"Timeout --> $self")
       goto(TimedOut) applying PaymentTimedOutEvent()
-    case Event(Stop, _)  =>
+    case Event(Stop, _) =>
       log.warning(s"Stopped --> $self")
       context.stop(self)
       stay
@@ -101,7 +113,7 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef)
 
 object BraintreePaymentActor {
 
-  sealed trait Command{
+  sealed trait Command {
     val orderId: String
   }
 
@@ -109,13 +121,13 @@ object BraintreePaymentActor {
 
   case class GetPaymentTokenCommand(orderId: String) extends Command
 
-  case class PaymentToken(token:UUID)
+  case class PaymentToken(token: UUID)
 
   case class AssignPaymentTokenCommand(orderId: String, token: UUID) extends Command
 
   case class ExecuteTransactionCommand(orderId: String, orderItems: Set[OrderItem]) extends Command
 
-  case class TransactionExecuted(referenceId:UUID)
+  case class TransactionExecuted(referenceId: UUID)
 
   case class ProcessExecutionResultCommand(orderId: String, referenceId: UUID) extends Command
 
@@ -191,12 +203,12 @@ object BraintreePaymentActor {
 
     // id extractor
     override def entityId(message: Any): String = message match {
-      case c:Command => c.orderId.toString
+      case c: Command => c.orderId.toString
     }
 
     // shard resolver
     override def shardId(message: Any): String = message match {
-      case c:Command => (c.orderId.toLong % numberOfShards).toString
+      case c: Command => (c.orderId.toLong % numberOfShards).toString
       case ShardRegion.StartEntity(id) => (id.toLong % numberOfShards).toString
     }
 
@@ -206,7 +218,7 @@ object BraintreePaymentActor {
     }
   }
 
-  def props(target: ActorRef) = Props(new BraintreePaymentActor(target))
+  def props(brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef) = Props(new BraintreePaymentActor(brainttreeClientActor, eventPublisherActor))
 }
 
 class BrainttreeClientActor extends Actor with ActorLogging {
@@ -235,4 +247,68 @@ object BrainttreeClientActor {
   case class ExecuteTransaction(orderId: String, amount: Long)
 
   def props() = Props[BrainttreeClientActor]
+}
+
+class EventPublisherActor(kafkaIp:String) extends Actor with ActorLogging {
+
+  implicit val system = context.system
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = system.dispatcher
+
+  override def receive = {
+    case e@ExecutionFinishedEvent(orderId, paymentId) =>
+      log.info(s"Sending $e")
+
+      val producerSettings = ProducerSettings(system, new ByteArraySerializer, new StringSerializer)
+        .withBootstrapServers(s"$kafkaIp:9092")
+
+      val kafkaSink = Producer.plainSink(producerSettings)
+
+      val (control, future) = Source.single(e)
+        .map { event =>
+          new ProducerRecord[Array[Byte], String]("test", event.orderId.getBytes, s"""{"order_id":$orderId, "payment_id":"$paymentId"}""")
+        }
+        .toMat(kafkaSink)(Keep.both)
+        .run()
+
+      future.onComplete {
+        case Failure(ex) =>
+          log.error(s"Stream failed due to error, restarting: $ex")
+          throw ex
+        case Success(s) =>
+          log.info(s"Sucess --->>>> $s")
+      }
+  }
+}
+
+object EventPublisherActor {
+  def props(kafkaIp:String) = Props(new EventPublisherActor(kafkaIp))
+}
+
+object Test extends App {
+
+  implicit val system = ActorSystem(clusterName)
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = system.dispatcher
+  val log: LoggingAdapter = Logging.getLogger(system, this)
+
+  val producerSettings = ProducerSettings(system, new ByteArraySerializer, new StringSerializer)
+    .withBootstrapServers("127.0.0.1:9092")
+
+  val kafkaSink = Producer.plainSink(producerSettings)
+
+  val (control, future) = Source.single(ExecutionFinishedEvent("17", UUID.randomUUID()))
+    .map { event =>
+      new ProducerRecord[Array[Byte], String]("test", event.orderId.getBytes, s"""{"order_id":${event.orderId}, "payment_id":"${event.referenceId}"}""")
+    }
+    .toMat(kafkaSink)(Keep.both)
+    .run()
+
+  future.onComplete {
+    case Failure(ex) =>
+      log.error(s"Stream failed due to error, restarting: $ex")
+      throw ex
+    case Success(s) =>
+      log.info(s"Sucess --->>>> $s")
+  }
 }

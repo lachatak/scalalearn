@@ -8,7 +8,7 @@ import akka.event.{Logging, LoggingAdapter}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import org.kaloz.persistence.BraintreePaymentActor.{ExecuteTransactionCommand, GetPaymentTokenCommand, OrderItem, PaymentToken, TransactionExecuted}
-import org.kaloz.persistence.{BraintreePaymentActor, BrainttreeClientActor}
+import org.kaloz.persistence.{BraintreePaymentActor, BrainttreeClientActor, EventPublisherActor}
 
 import scala.concurrent.duration._
 
@@ -20,10 +20,11 @@ object PaymentActorMain extends App {
   val log: LoggingAdapter = Logging.getLogger(system, this)
 
   val brainttreeClientActor = system.actorOf(BrainttreeClientActor.props())
+  val eventPublisherActor = system.actorOf(EventPublisherActor.props(kafkaIp))
 
   ClusterSharding(system).start(
     typeName = BraintreePaymentActor.shardName,
-    entityProps = BraintreePaymentActor.props(brainttreeClientActor),
+    entityProps = BraintreePaymentActor.props(brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
     messageExtractor = BraintreePaymentActor.messageExtractor(10)
   )

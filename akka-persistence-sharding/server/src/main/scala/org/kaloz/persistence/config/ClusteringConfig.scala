@@ -6,7 +6,8 @@ object ClusteringConfig {
   private val config = ConfigFactory.load()
 
   val clusterName = config.getString("clustering.cluster.name")
-  val port = config.getInt("clustering.port")
+
+  val httpPort = config.getInt("clustering.http-port")
 
   val kafkaIp = config.getString("clustering.kafka-ip")
 

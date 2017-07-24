@@ -29,29 +29,29 @@ object PaymentActorMain extends App {
     messageExtractor = BraintreePaymentActor.messageExtractor(10)
   )
 
-  if (port == 1600) {
+  log.info("Starting HTTP!!!!!")
 
-    log.info("Starting HTTP!!!!!")
-    //TODO for testing
-    import akka.http.scaladsl.Http
-    import akka.http.scaladsl.server.Directives._
-    import akka.pattern.ask
+  import akka.http.scaladsl.Http
+  import akka.http.scaladsl.server.Directives._
+  import akka.pattern.ask
 
-    implicit val materializer = ActorMaterializer()
-    implicit val executionContext = system.dispatcher
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = system.dispatcher
 
-    val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(BraintreePaymentActor.shardName)
+  val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(BraintreePaymentActor.shardName)
 
-    implicit val timeout = Timeout(5 seconds)
+  log.info(s"REGION -->> $braintreeRegion")
 
-    val route =
-      path("token"/ Segment) { orderId =>
-        get {
-          onSuccess((braintreeRegion ? GetPaymentTokenCommand(orderId)).mapTo[PaymentToken]) { token =>
-            complete(token.token.toString)
-          }
+  implicit val timeout = Timeout(5 seconds)
+
+  val route =
+    path("token" / Segment) { orderId =>
+      get {
+        onSuccess((braintreeRegion ? GetPaymentTokenCommand(orderId)).mapTo[PaymentToken]) { token =>
+          complete(token.token.toString)
         }
-      } ~ path("execute"/ Segment) { orderId =>
+      }
+    } ~ path("execute" / Segment) { orderId =>
       get {
         onSuccess((braintreeRegion ? ExecuteTransactionCommand(orderId, Set(OrderItem(UUID.randomUUID(), 10), OrderItem(UUID.randomUUID(), 20)))).mapTo[TransactionExecuted]) { ref =>
           complete(ref.referenceId.toString)
@@ -59,14 +59,12 @@ object PaymentActorMain extends App {
       }
     }
 
-    val host = "0.0.0.0"
-    val port = 8080
+  val host = "0.0.0.0"
 
-    val bindingFuture = Http().bindAndHandle(route, host, port)
+  val bindingFuture = Http().bindAndHandle(route, host, httpPort)
 
-    log.info(s"Application has been started and listening on $host:$port")
-//    bindingFuture
-//      .flatMap(_.unbind()) // trigger unbinding from the port
-//      .onComplete(_ => system.terminate()) // and shutdown when done
-  }
+  log.info(s"Application has been started and listening on $host:$httpPort")
+  //    bindingFuture
+  //      .flatMap(_.unbind()) // trigger unbinding from the port
+  //      .onComplete(_ => system.terminate()) // and shutdown when done
 }

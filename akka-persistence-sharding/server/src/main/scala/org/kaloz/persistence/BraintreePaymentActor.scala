@@ -69,6 +69,7 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
         case _: WaitingForTokenState =>
           brainttreeClientActor ! GetBraintreeToken(orderId)
           originalRequester = Some(sender())
+          log.info(s"$originalRequester for token $orderId")
       } //TIMEOUT for the external call
   }
 
@@ -78,6 +79,7 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
       goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax (60 second) andThen {
         case _: WaitingForExecutionState =>
           originalRequester.foreach(_ ! PaymentToken(token))
+          log.info(s"token send for $originalRequester for token $orderId")
       } //TIMEOUT for EXECUTION CALL
   }
 
@@ -89,6 +91,7 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
           clusterClient.foreach(_ ! ClusterClient.Send(s"/system/sharding/${clusterClientTarget}Payment", StopPaymentActor(orderId), localAffinity = false))
           brainttreeClientActor ! ExecuteTransaction(orderId, orderItems.map(_.amount).sum)
           originalRequester = Some(sender())
+          log.info(s"$originalRequester for execute $orderId")
       } //TIMEOUT for the external call
   }
 
@@ -100,6 +103,7 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
       goto(Executed) applying event andThen {
         case _: ExecutionFinishedState =>
           originalRequester.foreach(_ ! TransactionExecuted(referenceId))
+          log.info(s"result send for $originalRequester for token $orderId")
           eventPublisherActor ! event
         case x => log.warning(s"->>> unhandled $x - $event")
       }

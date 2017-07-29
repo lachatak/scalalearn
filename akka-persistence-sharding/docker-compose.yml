@@ -6,6 +6,7 @@ services:
     networks:
       - dc1
     depends_on:
+      - cassandra1
       - kafka
     ports:
       - '1600:1600'
@@ -16,8 +17,7 @@ services:
       CLUSTER_IP: seed1
       SEED_PORT_1600_TCP_ADDR: seed1
       SEED_PORT_1600_TCP_PORT: 1600
-      CASSANDRA_IP: 10.249.167.104
-#      CASSANDRA_IP: cassandra1
+      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8080
       WITH_RECEPTIONIST: "true"
@@ -30,6 +30,7 @@ services:
     networks:
       - dc1
     depends_on:
+      - cassandra1
       - seed1
       - kafka
     ports:
@@ -41,8 +42,7 @@ services:
       CLUSTER_IP: s1
       SEED_PORT_1600_TCP_ADDR: seed1
       SEED_PORT_1600_TCP_PORT: 1600
-      CASSANDRA_IP: 10.249.167.104
-#      CASSANDRA_IP: cassandra1
+      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8081
       WITH_RECEPTIONIST: "true"
@@ -55,6 +55,7 @@ services:
     networks:
       - dc1
     depends_on:
+      - cassandra1
       - kafka
     ports:
       - '1602:1602'
@@ -65,8 +66,7 @@ services:
       CLUSTER_IP: seed2
       SEED_PORT_1600_TCP_ADDR: seed2
       SEED_PORT_1600_TCP_PORT: 1602
-      CASSANDRA_IP: 10.249.167.104
-#      CASSANDRA_IP: cassandra1
+      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8082
       WITH_RECEPTIONIST: "true"
@@ -79,6 +79,7 @@ services:
     networks:
       - dc1
     depends_on:
+      - cassandra1
       - seed2
       - kafka
     ports:
@@ -90,8 +91,7 @@ services:
       CLUSTER_IP: s2
       SEED_PORT_1600_TCP_ADDR: seed2
       SEED_PORT_1600_TCP_PORT: 1602
-      CASSANDRA_IP: 10.249.167.104
-#      CASSANDRA_IP: cassandra1
+      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8083
       WITH_RECEPTIONIST: "true"
@@ -124,7 +124,6 @@ services:
     image: wurstmeister/kafka
     networks:
       - dc1
-#      - dc2
     depends_on:
       - zookeeper
     ports:

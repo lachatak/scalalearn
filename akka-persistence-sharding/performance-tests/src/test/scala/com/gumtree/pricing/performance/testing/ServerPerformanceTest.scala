@@ -5,19 +5,17 @@ import java.util.concurrent.atomic.AtomicInteger
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.netty.handler.codec.http.HttpResponseStatus
-//import scala.concurrent.duration._
 
 import scala.util.Random
 
 class ServerPerformanceTest extends Simulation {
 
   val ips = List("8080", "8081", "8082", "8083")
-//  val ips = List("8080", "8083")
 
   // Default configuration
-  val httpProtocol = http.baseURL("http://127.0.0.1")
+  val httpProtocol = http.baseURL("http://127.0.0.1").disableWarmUp
 
-  val id = new AtomicInteger(1000)
+  val id = new AtomicInteger(300)
 
   val feeder = Iterator.continually(Map("id" -> id.getAndIncrement()))
   val portfeeder = Iterator.continually(Map("port" -> Random.shuffle(ips).head))
@@ -32,16 +30,15 @@ class ServerPerformanceTest extends Simulation {
     .exec(http("token")
       .get(token)
       .check(status.is(HttpResponseStatus.OK.code())))
-    //    .pause(2 second)
     .feed(portfeeder)
     .exec(http("exec")
       .get(execute)
       .check(status.is(HttpResponseStatus.OK.code())))
 
-  val num = 500
+  val num = 100
 
   // Simulation set-up
-  setUp(serverScenario.inject(rampUsers(num*2) over (num)))
+  setUp(serverScenario.inject(rampUsers(num * 3) over (num)))
     .protocols(httpProtocol)
     .assertions(
       global.failedRequests.percent.lt(1),

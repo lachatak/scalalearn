@@ -1,5 +1,5 @@
-server/cassandra
-server/kafka
+cassandra
+kafka
 target
 .idea
 *.iml

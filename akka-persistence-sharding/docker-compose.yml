@@ -1,6 +1,21 @@
 version: '2'
 
 services:
+
+  web:
+    image: nginx
+    networks:
+      - dc1
+    volumes:
+     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+     - "80:80"
+    depends_on:
+     - seed1
+     - s1
+     - seed2
+     - s2
+
   seed1:
     image: lachatak/server:1.0.0
     networks:
@@ -105,7 +120,7 @@ services:
     networks:
       - dc1
     volumes:
-      - ./server/cassandra:/var/lib/cassandra
+      - ./cassandra:/var/lib/cassandra
     ports:
       - "7000:7000"
       - "7001:7001"
@@ -139,7 +154,7 @@ services:
 #      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.rmi.port=1099"
 #      JMX_PORT: 1099
     volumes:
-      - ./server/kafka:/kafka
+      - ./kafka:/kafka
 
 networks:
   dc1:

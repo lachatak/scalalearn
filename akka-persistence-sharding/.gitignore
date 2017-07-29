@@ -1,4 +1,4 @@
-server/datadir
+server/cassandra
 server/kafka
 target
 .idea

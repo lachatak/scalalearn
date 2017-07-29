@@ -1,51 +1,151 @@
 version: '2'
 
 services:
-  seed:
+  seed1:
     image: lachatak/server:1.0.0
+    networks:
+      - dc1
     depends_on:
-      - cassandra
+      - kafka
     ports:
       - '1600:1600'
+      - '8080:8080'
     environment:
+      CLUSTER_NAME: PAYMENT1
       CLUSTER_PORT: 1600
-      CLUSTER_IP: seed
-      SEED_PORT_1600_TCP_ADDR: seed
-      CASSANDRA_IP: cassandra
+      CLUSTER_IP: seed1
+      SEED_PORT_1600_TCP_ADDR: seed1
+      SEED_PORT_1600_TCP_PORT: 1600
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
+      KAFKA_IP: kafka
+      HTTP_PORT: 8080
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT2
+      RECEPTIONIST_ADDR: seed2
+      RECEPTIONIST_PORT: 1602
+
   s1:
     image: lachatak/server:1.0.0
+    networks:
+      - dc1
     depends_on:
-      - cassandra
-      - seed
+      - seed1
+      - kafka
     ports:
       - '1601:1601'
+      - '8081:8081'
     environment:
+      CLUSTER_NAME: PAYMENT1
       CLUSTER_PORT: 1601
       CLUSTER_IP: s1
-      SEED_PORT_1600_TCP_ADDR: seed
-      CASSANDRA_IP: cassandra
-  s2:
+      SEED_PORT_1600_TCP_ADDR: seed1
+      SEED_PORT_1600_TCP_PORT: 1600
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
+      KAFKA_IP: kafka
+      HTTP_PORT: 8081
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT2
+      RECEPTIONIST_ADDR: s2
+      RECEPTIONIST_PORT: 1603
+
+  seed2:
     image: lachatak/server:1.0.0
+    networks:
+      - dc1
     depends_on:
-      - cassandra
-      - seed
+      - kafka
     ports:
       - '1602:1602'
+      - '8082:8082'
     environment:
+      CLUSTER_NAME: PAYMENT2
       CLUSTER_PORT: 1602
-      CLUSTER_IP: s2
-      SEED_PORT_1600_TCP_ADDR: seed
-      CASSANDRA_IP: cassandra
+      CLUSTER_IP: seed2
+      SEED_PORT_1600_TCP_ADDR: seed2
+      SEED_PORT_1600_TCP_PORT: 1602
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
+      KAFKA_IP: kafka
+      HTTP_PORT: 8082
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT1
+      RECEPTIONIST_ADDR: seed1
+      RECEPTIONIST_PORT: 1600
 
-  cassandra:
+  s2:
+    image: lachatak/server:1.0.0
+    networks:
+      - dc1
+    depends_on:
+      - seed2
+      - kafka
+    ports:
+      - '1603:1603'
+      - '8083:8083'
+    environment:
+      CLUSTER_NAME: PAYMENT2
+      CLUSTER_PORT: 1603
+      CLUSTER_IP: s2
+      SEED_PORT_1600_TCP_ADDR: seed2
+      SEED_PORT_1600_TCP_PORT: 1602
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
+      KAFKA_IP: kafka
+      HTTP_PORT: 8083
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT1
+      RECEPTIONIST_ADDR: s1
+      RECEPTIONIST_PORT: 1601
+
+  cassandra1:
+    hostname: cassandra1
     image: cassandra
+    networks:
+      - dc1
     volumes:
       - ./server/datadir:/var/lib/cassandra
-    environment:
-      - CASSANDRA_DC=datacenter1
     ports:
       - "7000:7000"
       - "7001:7001"
       - "7199:7199"
       - "9042:9042"
       - "9160:9160"
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    networks:
+      - dc1
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    networks:
+      - dc1
+#      - dc2
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+#      - "1099:1099"
+    hostname: kafka
+    environment:
+      KAFKA_LOG_DIRS: /kafka
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_CREATE_TOPICS: "test:1:1"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.rmi.port=1099"
+#      JMX_PORT: 1099
+    volumes:
+      - ./server/kafka:/kafka
+
+networks:
+  dc1:
+    external:
+      name: dc1
+#  dc2:
+#    external:
+#      name: dc2

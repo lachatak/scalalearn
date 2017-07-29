@@ -1,3 +1,5 @@
 server/datadir
+server/kafka
 target
 .idea
+*.iml

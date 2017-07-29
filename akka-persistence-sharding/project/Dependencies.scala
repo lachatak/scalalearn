@@ -6,9 +6,12 @@ object Version {
   val cats            = "0.9.0"
   val akka            = "2.5.3"
   val akkaPCassandra  = "0.54"
-//  val akkaHttp      = "1.0"
+  val akkaHttp        = "10.0.9"
+  val akkaStreamsKafka= "0.16"
   val scalaLogging    = "3.6.0"
   val logBack         = "1.2.3"
+  val json4sVersion   = "3.5.2"
+  val stamina         = "0.1.3"
   val mockito         = "1.10.19"
   val scalaTest       = "3.0.3"
 }
@@ -23,10 +26,14 @@ object Library {
   val akkaSharding           = "com.typesafe.akka"           %% "akka-cluster-sharding"                 % Version.akka
   val akkaSlf4j              = "com.typesafe.akka"           %% "akka-slf4j"                            % Version.akka
   val akkapCassandra         = "com.typesafe.akka"           %% "akka-persistence-cassandra"            % Version.akkaPCassandra
-//  val akkaHttp             = "com.typesafe.akka"           %% "akka-http-experimental"                % Version.akkaHttp
+  val akkaHttp               = "com.typesafe.akka"           %% "akka-http"                             % Version.akkaHttp
+  val akkaStreamsKafka       = "com.typesafe.akka"           %% "akka-stream-kafka"                     % Version.akkaStreamsKafka
   val scalaLogging           = "com.typesafe.scala-logging"  %% "scala-logging"                         % Version.scalaLogging
   val logBackClassic         = "ch.qos.logback"              %  "logback-classic"                       % Version.logBack
   val logBackCore            = "ch.qos.logback"              %  "logback-core"                          % Version.logBack
+  val json4sNative           = "org.json4s"                  %% "json4s-native"                         % Version.json4sVersion
+  val json4sExt              = "org.json4s"                  %% "json4s-ext"                            % Version.json4sVersion
+  val stamina                = "com.scalapenos"              %% "stamina-json"                          % Version.stamina
 
   val akkaTestkit            = "com.typesafe.akka"           %% "akka-testkit"                          % Version.akka
   val akkaMultiNodeTest      = "com.typesafe.akka"           %% "akka-multi-node-testkit"               % Version.akka
@@ -46,10 +53,15 @@ object Dependencies {
     akkaPQuery,
     akkaCluster,
     akkaClusterTools,
+    akkaHttp,
+    akkaStreamsKafka,
     akkaSharding,
     akkaSlf4j,
     scalaLogging,
     logBackClassic,
+    json4sNative,
+    json4sExt,
+//    stamina,
     logBackCore,
     akkaTestkit       % "test",
     mockito       	  % "test",

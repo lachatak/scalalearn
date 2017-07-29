@@ -3,56 +3,57 @@ package org.kaloz.persistence
 import java.util.UUID
 
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, FSM, Props, ReceiveTimeout}
+import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Props, ReceiveTimeout}
+import akka.cluster.client.ClusterClient
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
-import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.HttpRequest
 import akka.kafka.ProducerSettings
 import akka.kafka.scaladsl.Producer
-import akka.pattern.pipe
+import akka.persistence.RecoveryCompleted
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Keep, Source}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
-import org.kaloz.persistence.BraintreePaymentActor.{AssignPaymentTokenCommand, ExecuteTransactionCommand, Executed, Executing, ExecutionFinishedEvent, ExecutionFinishedState, ExecutionStartedEvent, ExecutionStartedState, GetPaymentTokenCommand, PAID, PaymentState, PaymentTimedOutEvent, PaymentToken, PaymentTokenAssignedEvent, PaymentTokenRequestedEvent, ProcessExecutionResultCommand, TimedOut, TransactionExecuted, Uninitialised, UninitialisedPaymentState, WaitingForExecution, WaitingForExecutionState, WaitingForToken, WaitingForTokenState}
+import org.kaloz.persistence.BraintreePaymentActor.{AssignPaymentTokenCommand, ExecuteTransactionCommand, Executed, Executing, ExecutionFinishedEvent, ExecutionFinishedState, ExecutionStartedEvent, ExecutionStartedState, GetPaymentTokenCommand, PAID, PaymentState, PaymentTimedOutEvent, PaymentToken, PaymentTokenAssignedEvent, PaymentTokenRequestedEvent, ProcessExecutionResultCommand, StopPaymentActor, TimedOut, TransactionExecuted, Uninitialised, UninitialisedPaymentState, WaitingForExecution, WaitingForExecutionState, WaitingForToken, WaitingForTokenState}
 import org.kaloz.persistence.BrainttreeClientActor.{ExecuteTransaction, GetBraintreeToken}
-import org.kaloz.persistence.config.ClusteringConfig.clusterName
 
 import scala.concurrent.duration._
 import scala.reflect.{ClassTag, _}
 import scala.util.{Failure, Success}
 
-class BraintreePaymentActor(brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef)
+class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[ActorRef], brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef)
   extends PersistentFSM[BraintreePaymentActor.PaymentFSMState, BraintreePaymentActor.PaymentState, BraintreePaymentActor.Event] with ActorLogging {
 
   context.setReceiveTimeout(2 minute)
 
   override def persistenceId = "braintree-payment-" + self.path.name
 
+  log.info(s"STARTED ->> ${self.path}")
+
+  var originalRequester: Option[ActorRef] = None
 
   override def applyEvent(evt: BraintreePaymentActor.Event, currentState: PaymentState): PaymentState = {
     (evt, currentState) match {
-      case (PaymentTokenRequestedEvent(orderId, requester), _) =>
+      case (PaymentTokenRequestedEvent(orderId), UninitialisedPaymentState) =>
         log.info(s"Payment $orderId is in WAITING for TOKEN state")
-        WaitingForTokenState(orderId, requester)
+        WaitingForTokenState(orderId)
 
-      case (PaymentTokenAssignedEvent(orderId, token), _) =>
+      case (PaymentTokenAssignedEvent(orderId, token), WaitingForTokenState(_)) =>
         log.info(s"Payment $orderId is in WAITING for EXECUTION state")
         WaitingForExecutionState(orderId, token)
 
-      case (ExecutionStartedEvent(orderId, orderItems, requester), WaitingForExecutionState(_, token)) =>
+      case (ExecutionStartedEvent(orderId, orderItems), WaitingForExecutionState(_, token)) =>
         log.info(s"Payment $orderId EXECUTION is STARTED")
-        ExecutionStartedState(orderId, token, orderItems, requester)
+        ExecutionStartedState(orderId, token, orderItems)
 
-      case (ExecutionFinishedEvent(orderId, referenceId), ExecutionStartedState(_, token, orderItems, _)) =>
+      case (ExecutionFinishedEvent(orderId, referenceId), ExecutionStartedState(_, token, orderItems)) =>
         log.info(s"Payment $orderId EXECUTION is FINISHED")
         ExecutionFinishedState(orderId, token, referenceId, orderItems.map(_.copy(status = PAID)))
 
-      case (_, _) =>
+      case (e, s) =>
+        log.info(s"Unhandled $e for $s")
         currentState
     }
   }
@@ -62,31 +63,45 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef, eventPublisherActor
   startWith(Uninitialised, UninitialisedPaymentState)
 
   when(Uninitialised) {
-    case Event(g@GetPaymentTokenCommand(orderId), _) =>
-      brainttreeClientActor ! GetBraintreeToken(orderId)
-      goto(WaitingForToken) applying PaymentTokenRequestedEvent(orderId, sender()) forMax (5 second) //TIMEOUT for the external call
+    case Event(g@GetPaymentTokenCommand(orderId), s) =>
+      log.info(s"Arrived $g in $s")
+      goto(WaitingForToken) applying PaymentTokenRequestedEvent(orderId) forMax (5 second) andThen {
+        case _: WaitingForTokenState =>
+          brainttreeClientActor ! GetBraintreeToken(orderId)
+          originalRequester = Some(sender())
+      } //TIMEOUT for the external call
   }
 
   when(WaitingForToken) {
-    case Event(AssignPaymentTokenCommand(orderId, token), WaitingForTokenState(_, requester)) =>
-      requester ! PaymentToken(token)
-      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax (60 second) //TIMEOUT for EXECUTION CALL
+    case Event(g@AssignPaymentTokenCommand(orderId, token), s) =>
+      log.info(s"Arrived $g in $s")
+      goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax (60 second) andThen {
+        case _: WaitingForExecutionState =>
+          originalRequester.foreach(_ ! PaymentToken(token))
+      } //TIMEOUT for EXECUTION CALL
   }
 
   when(WaitingForExecution) {
-    case Event(ExecuteTransactionCommand(orderId, orderItems), _) =>
-      brainttreeClientActor ! ExecuteTransaction(orderId, orderItems.map(_.amount).sum)
-      goto(Executing) applying ExecutionStartedEvent(orderId, orderItems, sender()) forMax (5 second) //TIMEOUT for the external call
+    case Event(g@ExecuteTransactionCommand(orderId, orderItems), s) =>
+      log.info(s"Arrived $g in $s")
+      goto(Executing) applying ExecutionStartedEvent(orderId, orderItems) forMax (5 second) andThen {
+        case _: ExecutionStartedState =>
+          clusterClient.foreach(_ ! ClusterClient.Send(s"/system/sharding/${clusterClientTarget}Payment", StopPaymentActor(orderId), localAffinity = false))
+          brainttreeClientActor ! ExecuteTransaction(orderId, orderItems.map(_.amount).sum)
+          originalRequester = Some(sender())
+      } //TIMEOUT for the external call
   }
 
   when(Executing) {
-    case Event(ProcessExecutionResultCommand(orderId, referenceId), ExecutionStartedState(_, _, _, requester)) =>
-      requester ! TransactionExecuted(referenceId)
+    case Event(g@ProcessExecutionResultCommand(orderId, referenceId), s) =>
+      log.info(s"Arrived $g in $s")
       context.parent ! Passivate(stopMessage = Stop)
       val event = ExecutionFinishedEvent(orderId, referenceId)
       goto(Executed) applying event andThen {
         case _: ExecutionFinishedState =>
+          originalRequester.foreach(_ ! TransactionExecuted(referenceId))
           eventPublisherActor ! event
+        case x => log.warning(s"->>> unhandled $x - $event")
       }
   }
 
@@ -102,6 +117,13 @@ class BraintreePaymentActor(brainttreeClientActor: ActorRef, eventPublisherActor
     case Event(Stop, _) =>
       log.warning(s"Stopped --> $self")
       context.stop(self)
+      stay
+    case Event(StopPaymentActor(orderId), _) =>
+      log.warning(s"Stop processing $orderId")
+      context.parent ! Passivate(stopMessage = Stop)
+      stay
+    case Event(RecoveryCompleted, s) =>
+      log.warning(s"Recovery completed!!! $s")
       stay
     case Event(e, s) =>
       log.warning("received unhandled request {} in state {}/{}", e, stateName, s)
@@ -131,6 +153,8 @@ object BraintreePaymentActor {
 
   case class ProcessExecutionResultCommand(orderId: String, referenceId: UUID) extends Command
 
+  case class StopPaymentActor(orderId: String) extends Command
+
   sealed trait OrderItemStatus
 
   case object UNPAID extends OrderItemStatus
@@ -143,7 +167,7 @@ object BraintreePaymentActor {
 
   case object CANCELLED extends OrderItemStatus
 
-  case class OrderItem(orderItemId: UUID, amount: Long, status: OrderItemStatus = UNPAID)
+  case class OrderItem(orderItemId: String, amount: Long, status: OrderItemStatus = UNPAID)
 
   sealed trait PaymentFSMState extends FSMState
 
@@ -171,11 +195,11 @@ object BraintreePaymentActor {
     override def identifier: String = "TimedOut"
   }
 
-  case class PaymentTokenRequestedEvent(orderId: String, requester: ActorRef) extends Event
+  case class PaymentTokenRequestedEvent(orderId: String) extends Event
 
-  case class PaymentTokenAssignedEvent(orderId: String, toke: UUID) extends Event
+  case class PaymentTokenAssignedEvent(orderId: String, token: UUID) extends Event
 
-  case class ExecutionStartedEvent(orderId: String, orderItems: Set[OrderItem], requester: ActorRef) extends Event
+  case class ExecutionStartedEvent(orderId: String, orderItems: Set[OrderItem]) extends Event
 
   case class PaymentTimedOutEvent() extends Event
 
@@ -185,11 +209,11 @@ object BraintreePaymentActor {
 
   case object UninitialisedPaymentState extends PaymentState
 
-  case class WaitingForTokenState(orderId: String, requester: ActorRef) extends PaymentState
+  case class WaitingForTokenState(orderId: String) extends PaymentState
 
   case class WaitingForExecutionState(orderId: String, token: UUID) extends PaymentState
 
-  case class ExecutionStartedState(orderId: String, token: UUID, orderItems: Set[OrderItem], requester: ActorRef) extends PaymentState
+  case class ExecutionStartedState(orderId: String, token: UUID, orderItems: Set[OrderItem]) extends PaymentState
 
   case class ExecutionFinishedState(orderId: String, token: UUID, reference: UUID, orderItems: Set[OrderItem]) extends PaymentState
 
@@ -218,7 +242,7 @@ object BraintreePaymentActor {
     }
   }
 
-  def props(brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef) = Props(new BraintreePaymentActor(brainttreeClientActor, eventPublisherActor))
+  def props(clusterClientTarget: String, clusterClient: Option[ActorRef], brainttreeClientActor: ActorRef, eventPublisherActor: ActorRef) = Props(new BraintreePaymentActor(clusterClientTarget, clusterClient, brainttreeClientActor, eventPublisherActor))
 }
 
 class BrainttreeClientActor extends Actor with ActorLogging {
@@ -230,13 +254,15 @@ class BrainttreeClientActor extends Actor with ActorLogging {
   override def receive = {
     case GetBraintreeToken(orderId) =>
       log.info(s"Client -> Get braintree TOKEN for $orderId")
-      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
-        .map(_ => AssignPaymentTokenCommand(orderId, UUID.randomUUID())) pipeTo sender()
+      //      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
+      //        .map(_ => AssignPaymentTokenCommand(orderId, UUID.randomUUID())) pipeTo sender()
+      sender() ! AssignPaymentTokenCommand(orderId, UUID.randomUUID())
 
     case ExecuteTransaction(orderId, amount: Long) =>
       log.info(s"Client -> Execute transaction for $orderId with $amount")
-      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
-        .map(_ => ProcessExecutionResultCommand(orderId, UUID.randomUUID())) pipeTo sender()
+      //      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
+      //        .map(_ => ProcessExecutionResultCommand(orderId, UUID.randomUUID())) pipeTo sender()
+      sender() ! ProcessExecutionResultCommand(orderId, UUID.randomUUID())
   }
 }
 
@@ -249,7 +275,7 @@ object BrainttreeClientActor {
   def props() = Props[BrainttreeClientActor]
 }
 
-class EventPublisherActor(kafkaIp:String) extends Actor with ActorLogging {
+class EventPublisherActor(kafkaIp: String) extends Actor with ActorLogging {
 
   implicit val system = context.system
   implicit val materializer = ActorMaterializer()
@@ -282,33 +308,5 @@ class EventPublisherActor(kafkaIp:String) extends Actor with ActorLogging {
 }
 
 object EventPublisherActor {
-  def props(kafkaIp:String) = Props(new EventPublisherActor(kafkaIp))
-}
-
-object Test extends App {
-
-  implicit val system = ActorSystem(clusterName)
-  implicit val materializer = ActorMaterializer()
-  implicit val executionContext = system.dispatcher
-  val log: LoggingAdapter = Logging.getLogger(system, this)
-
-  val producerSettings = ProducerSettings(system, new ByteArraySerializer, new StringSerializer)
-    .withBootstrapServers("127.0.0.1:9092")
-
-  val kafkaSink = Producer.plainSink(producerSettings)
-
-  val (control, future) = Source.single(ExecutionFinishedEvent("17", UUID.randomUUID()))
-    .map { event =>
-      new ProducerRecord[Array[Byte], String]("test", event.orderId.getBytes, s"""{"order_id":${event.orderId}, "payment_id":"${event.referenceId}"}""")
-    }
-    .toMat(kafkaSink)(Keep.both)
-    .run()
-
-  future.onComplete {
-    case Failure(ex) =>
-      log.error(s"Stream failed due to error, restarting: $ex")
-      throw ex
-    case Success(s) =>
-      log.info(s"Sucess --->>>> $s")
-  }
+  def props(kafkaIp: String) = Props(new EventPublisherActor(kafkaIp))
 }

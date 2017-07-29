@@ -11,4 +11,9 @@ object ClusteringConfig {
 
   val kafkaIp = config.getString("clustering.kafka-ip")
 
+  val withReceptionist = config.getBoolean("clustering.with-receptionist")
+  val receptionistName = config.getString("clustering.receptionist-name")
+  val receptionistIp = config.getString("clustering.receptionist-addr")
+  val receptionistPort = config.getString("clustering.receptionist-port")
+
 }

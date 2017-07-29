@@ -19,7 +19,7 @@ object SendPayOrderCommandMain extends App {
 
   ClusterSharding(system).start(
     typeName = BraintreePaymentActor.shardName,
-    entityProps = BraintreePaymentActor.props(brainttreeClientActor, eventPublisherActor),
+    entityProps = BraintreePaymentActor.props(null, null, brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
     messageExtractor = BraintreePaymentActor.messageExtractor(10)
   )
@@ -28,7 +28,7 @@ object SendPayOrderCommandMain extends App {
   val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(BraintreePaymentActor.shardName)
 
   braintreeRegion ! GetPaymentTokenCommand("1")
-  braintreeRegion ! ExecuteTransactionCommand("1", Set(OrderItem(UUID.randomUUID(), 10), OrderItem(UUID.randomUUID(), 20)))
+  braintreeRegion ! ExecuteTransactionCommand("1", Set(OrderItem(UUID.randomUUID().toString, 10), OrderItem(UUID.randomUUID().toString, 20)))
 
   Thread.sleep(10000)
 

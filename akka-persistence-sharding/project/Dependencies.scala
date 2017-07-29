@@ -10,6 +10,8 @@ object Version {
   val akkaStreamsKafka= "0.16"
   val scalaLogging    = "3.6.0"
   val logBack         = "1.2.3"
+  val json4sVersion   = "3.5.2"
+  val stamina         = "0.1.3"
   val mockito         = "1.10.19"
   val scalaTest       = "3.0.3"
 }
@@ -29,6 +31,9 @@ object Library {
   val scalaLogging           = "com.typesafe.scala-logging"  %% "scala-logging"                         % Version.scalaLogging
   val logBackClassic         = "ch.qos.logback"              %  "logback-classic"                       % Version.logBack
   val logBackCore            = "ch.qos.logback"              %  "logback-core"                          % Version.logBack
+  val json4sNative           = "org.json4s"                  %% "json4s-native"                         % Version.json4sVersion
+  val json4sExt              = "org.json4s"                  %% "json4s-ext"                            % Version.json4sVersion
+  val stamina                = "com.scalapenos"              %% "stamina-json"                          % Version.stamina
 
   val akkaTestkit            = "com.typesafe.akka"           %% "akka-testkit"                          % Version.akka
   val akkaMultiNodeTest      = "com.typesafe.akka"           %% "akka-multi-node-testkit"               % Version.akka
@@ -54,6 +59,9 @@ object Dependencies {
     akkaSlf4j,
     scalaLogging,
     logBackClassic,
+    json4sNative,
+    json4sExt,
+//    stamina,
     logBackCore,
     akkaTestkit       % "test",
     mockito       	  % "test",

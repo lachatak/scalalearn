@@ -2,7 +2,8 @@ package org.kaloz.persistence.main
 
 import java.util.UUID
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorPath, ActorRef, ActorSystem}
+import akka.cluster.client.{ClusterClient, ClusterClientReceptionist, ClusterClientSettings}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.event.{Logging, LoggingAdapter}
 import akka.stream.ActorMaterializer
@@ -19,12 +20,23 @@ object PaymentActorMain extends App {
   implicit val system = ActorSystem(clusterName)
   val log: LoggingAdapter = Logging.getLogger(system, this)
 
+  val clusterClient: Option[ActorRef] = if (withReceptionist) {
+    val initialContacts = Set(
+      ActorPath.fromString(s"akka.tcp://$receptionistName@$receptionistIp:$receptionistPort/system/receptionist"))
+    val settings = ClusterClientSettings(system).withInitialContacts(initialContacts)
+
+    val clusterClient = system.actorOf(ClusterClient.props(settings), "client")
+    Some(clusterClient)
+  } else {
+    None
+  }
+
   val brainttreeClientActor = system.actorOf(BrainttreeClientActor.props())
   val eventPublisherActor = system.actorOf(EventPublisherActor.props(kafkaIp))
 
   ClusterSharding(system).start(
-    typeName = BraintreePaymentActor.shardName,
-    entityProps = BraintreePaymentActor.props(brainttreeClientActor, eventPublisherActor),
+    typeName = clusterName + BraintreePaymentActor.shardName,
+    entityProps = BraintreePaymentActor.props(receptionistName, clusterClient, brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
     messageExtractor = BraintreePaymentActor.messageExtractor(10)
   )
@@ -38,7 +50,10 @@ object PaymentActorMain extends App {
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
 
-  val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(BraintreePaymentActor.shardName)
+  val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(clusterName + BraintreePaymentActor.shardName)
+
+  if (withReceptionist)
+    ClusterClientReceptionist(system).registerService(braintreeRegion)
 
   log.info(s"REGION -->> $braintreeRegion")
 
@@ -53,7 +68,7 @@ object PaymentActorMain extends App {
       }
     } ~ path("execute" / Segment) { orderId =>
       get {
-        onSuccess((braintreeRegion ? ExecuteTransactionCommand(orderId, Set(OrderItem(UUID.randomUUID(), 10), OrderItem(UUID.randomUUID(), 20)))).mapTo[TransactionExecuted]) { ref =>
+        onSuccess((braintreeRegion ? ExecuteTransactionCommand(orderId, Set(OrderItem(UUID.randomUUID().toString, 10), OrderItem(UUID.randomUUID().toString, 20)))).mapTo[TransactionExecuted]) { ref =>
           complete(ref.referenceId.toString)
         }
       }

@@ -6,7 +6,6 @@ services:
     networks:
       - dc1
     depends_on:
-      - cassandra
       - kafka
     ports:
       - '1600:1600'
@@ -17,16 +16,20 @@ services:
       CLUSTER_IP: seed1
       SEED_PORT_1600_TCP_ADDR: seed1
       SEED_PORT_1600_TCP_PORT: 1600
-      CASSANDRA_IP: cassandra
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8080
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT2
+      RECEPTIONIST_ADDR: seed2
+      RECEPTIONIST_PORT: 1602
 
   s1:
     image: lachatak/server:1.0.0
     networks:
       - dc1
     depends_on:
-      - cassandra
       - seed1
       - kafka
     ports:
@@ -38,16 +41,20 @@ services:
       CLUSTER_IP: s1
       SEED_PORT_1600_TCP_ADDR: seed1
       SEED_PORT_1600_TCP_PORT: 1600
-      CASSANDRA_IP: cassandra
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8081
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT2
+      RECEPTIONIST_ADDR: s2
+      RECEPTIONIST_PORT: 1603
 
   seed2:
     image: lachatak/server:1.0.0
     networks:
-      - dc2
+      - dc1
     depends_on:
-      - cassandra
       - kafka
     ports:
       - '1602:1602'
@@ -58,16 +65,20 @@ services:
       CLUSTER_IP: seed2
       SEED_PORT_1600_TCP_ADDR: seed2
       SEED_PORT_1600_TCP_PORT: 1602
-      CASSANDRA_IP: cassandra
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8082
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT1
+      RECEPTIONIST_ADDR: seed1
+      RECEPTIONIST_PORT: 1600
 
   s2:
     image: lachatak/server:1.0.0
     networks:
-      - dc2
+      - dc1
     depends_on:
-      - cassandra
       - seed2
       - kafka
     ports:
@@ -79,19 +90,22 @@ services:
       CLUSTER_IP: s2
       SEED_PORT_1600_TCP_ADDR: seed2
       SEED_PORT_1600_TCP_PORT: 1602
-      CASSANDRA_IP: cassandra
+      CASSANDRA_IP: 10.249.167.104
+#      CASSANDRA_IP: cassandra1
       KAFKA_IP: kafka
       HTTP_PORT: 8083
+      WITH_RECEPTIONIST: "true"
+      RECEPTIONIST_NAME: PAYMENT1
+      RECEPTIONIST_ADDR: s1
+      RECEPTIONIST_PORT: 1601
 
-  cassandra:
+  cassandra1:
+    hostname: cassandra1
     image: cassandra
     networks:
       - dc1
-      - dc2
     volumes:
       - ./server/datadir:/var/lib/cassandra
-    environment:
-      - CASSANDRA_DC=datacenter1
     ports:
       - "7000:7000"
       - "7001:7001"
@@ -110,7 +124,7 @@ services:
     image: wurstmeister/kafka
     networks:
       - dc1
-      - dc2
+#      - dc2
     depends_on:
       - zookeeper
     ports:
@@ -132,6 +146,6 @@ networks:
   dc1:
     external:
       name: dc1
-  dc2:
-    external:
-      name: dc2
+#  dc2:
+#    external:
+#      name: dc2

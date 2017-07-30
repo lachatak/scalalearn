@@ -52,6 +52,7 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
         ExecutionFinishedState(orderId, token, referenceId, orderItems.map(_.copy(status = PAID)))
 
       case (e, s) =>
+        log.warning("applyEvent unhandled request {} in state {}/{}", e, stateName, s)
         currentState
     }
   }

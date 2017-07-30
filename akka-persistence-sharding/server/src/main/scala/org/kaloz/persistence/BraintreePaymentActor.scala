@@ -3,13 +3,12 @@ package org.kaloz.persistence
 import java.util.UUID
 
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Props, ReceiveTimeout}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, ReceiveTimeout}
 import akka.cluster.client.ClusterClient
-import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.{MessageExtractor, Passivate}
+import akka.cluster.sharding.{ClusterSharding, ShardRegion}
 import akka.kafka.ProducerSettings
 import akka.kafka.scaladsl.Producer
-import akka.persistence.RecoveryCompleted
 import akka.persistence.fsm.PersistentFSM
 import akka.persistence.fsm.PersistentFSM.FSMState
 import akka.stream.ActorMaterializer
@@ -53,7 +52,6 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
         ExecutionFinishedState(orderId, token, referenceId, orderItems.map(_.copy(status = PAID)))
 
       case (e, s) =>
-        log.info(s"Unhandled $e for $s")
         currentState
     }
   }
@@ -70,7 +68,12 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
           brainttreeClientActor ! GetBraintreeToken(orderId)
           originalRequester = Some(sender())
           log.info(s"$originalRequester for token $orderId")
-      } //TIMEOUT for the external call
+      }
+    case Event(g: ExecuteTransactionCommand, s) =>
+      log.warning("Transaction not initialised {} in state {}/{}", g, stateName, s)
+      context.parent ! Passivate(stopMessage = Stop)
+      sender() ! Left("Transaction Not Initialised!")
+      stay
   }
 
   when(WaitingForToken) {
@@ -78,9 +81,9 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
       log.info(s"Arrived $g in $s")
       goto(WaitingForExecution) applying PaymentTokenAssignedEvent(orderId, token) forMax (60 second) andThen {
         case _: WaitingForExecutionState =>
-          originalRequester.foreach(_ ! PaymentToken(token))
+          originalRequester.foreach(_ ! Right(PaymentToken(token.toString)))
           log.info(s"token send for $originalRequester for token $orderId")
-      } //TIMEOUT for EXECUTION CALL
+      }
   }
 
   when(WaitingForExecution) {
@@ -92,7 +95,12 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
           brainttreeClientActor ! ExecuteTransaction(orderId, orderItems.map(_.amount).sum)
           originalRequester = Some(sender())
           log.info(s"$originalRequester for execute $orderId")
-      } //TIMEOUT for the external call
+      }
+    case Event(g: GetPaymentTokenCommand, s) =>
+      log.warning("Transaction Already Started {} in state {}/{}", g, stateName, s)
+      context.parent ! Passivate(stopMessage = Stop)
+      sender() ! Left("Transaction Already Started!")
+      stay
   }
 
   when(Executing) {
@@ -102,16 +110,28 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
       val event = ExecutionFinishedEvent(orderId, referenceId)
       goto(Executed) applying event andThen {
         case _: ExecutionFinishedState =>
-          originalRequester.foreach(_ ! TransactionExecuted(referenceId))
+          originalRequester.foreach(_ ! Right(TransactionExecuted(referenceId.toString)))
           log.info(s"result send for $originalRequester for token $orderId")
           eventPublisherActor ! event
         case x => log.warning(s"->>> unhandled $x - $event")
       }
   }
 
-  when(Executed)(FSM.NullFunction)
+  when(Executed) {
+    case Event(e@(_: GetPaymentTokenCommand | _: ExecuteTransactionCommand), s) =>
+      log.warning("Already Executed {} in state {}/{}", e, stateName, s)
+      context.parent ! Passivate(stopMessage = Stop)
+      sender() ! Left("Already executed!")
+      stay
+  }
 
-  when(TimedOut)(FSM.NullFunction)
+  when(TimedOut) {
+    case Event(e@(_: GetPaymentTokenCommand | _: ExecuteTransactionCommand), s) =>
+      log.warning("Already TimedOut {} in state {}/{}", e, stateName, s)
+      context.parent ! Passivate(stopMessage = Stop)
+      sender() ! Left("Already TimedOut!")
+      stay
+  }
 
   whenUnhandled {
     case Event(ReceiveTimeout | PersistentFSM.StateTimeout, _) =>
@@ -125,9 +145,6 @@ class BraintreePaymentActor(clusterClientTarget: String, clusterClient: Option[A
     case Event(StopPaymentActor(orderId), _) =>
       log.warning(s"Stop processing $orderId")
       context.parent ! Passivate(stopMessage = Stop)
-      stay
-    case Event(RecoveryCompleted, s) =>
-      log.warning(s"Recovery completed!!! $s")
       stay
     case Event(e, s) =>
       log.warning("received unhandled request {} in state {}/{}", e, stateName, s)
@@ -147,13 +164,13 @@ object BraintreePaymentActor {
 
   case class GetPaymentTokenCommand(orderId: String) extends Command
 
-  case class PaymentToken(token: UUID)
+  case class PaymentToken(token: String)
 
   case class AssignPaymentTokenCommand(orderId: String, token: UUID) extends Command
 
   case class ExecuteTransactionCommand(orderId: String, orderItems: Set[OrderItem]) extends Command
 
-  case class TransactionExecuted(referenceId: UUID)
+  case class TransactionExecuted(referenceId: String)
 
   case class ProcessExecutionResultCommand(orderId: String, referenceId: UUID) extends Command
 
@@ -254,19 +271,28 @@ class BrainttreeClientActor extends Actor with ActorLogging {
   implicit val system = context.system
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
+  import org.kaloz.persistence.config.ClusteringConfig.clusterName
 
   override def receive = {
     case GetBraintreeToken(orderId) =>
       log.info(s"Client -> Get braintree TOKEN for $orderId")
       //      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
       //        .map(_ => AssignPaymentTokenCommand(orderId, UUID.randomUUID())) pipeTo sender()
-      sender() ! AssignPaymentTokenCommand(orderId, UUID.randomUUID())
+      val braintreeRegion: ActorRef = ClusterSharding(context.system).shardRegion(clusterName + BraintreePaymentActor.shardName)
+
+      log.info(s"$braintreeRegion is available in BrainttreeClientActor")
+
+      braintreeRegion ! AssignPaymentTokenCommand(orderId, UUID.randomUUID())
 
     case ExecuteTransaction(orderId, amount: Long) =>
       log.info(s"Client -> Execute transaction for $orderId with $amount")
       //      Http().singleRequest(HttpRequest(uri = "http://akka.io"))
       //        .map(_ => ProcessExecutionResultCommand(orderId, UUID.randomUUID())) pipeTo sender()
-      sender() ! ProcessExecutionResultCommand(orderId, UUID.randomUUID())
+      val braintreeRegion: ActorRef = ClusterSharding(context.system).shardRegion(clusterName + BraintreePaymentActor.shardName)
+
+      log.info(s"$braintreeRegion is available in BrainttreeClientActor")
+
+      braintreeRegion ! ProcessExecutionResultCommand(orderId, UUID.randomUUID())
   }
 }
 

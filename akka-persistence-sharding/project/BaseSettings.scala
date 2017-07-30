@@ -8,11 +8,11 @@ object BaseSettings {
       organization := "org.kaloz.persistence",
       description := "Akka Persistence Sharding Test",
       version := "1.0.0",
-      scalaVersion := "2.12.1",
+      scalaVersion := "2.12.3",
       licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")),
       homepage := Some(url("http://kaloz.org")),
       crossPaths := false,
-      scalaOrganization in ThisBuild := "org.typelevel",
+//      scalaOrganization in ThisBuild := "org.typelevel",
       scalacOptions := Seq(
         "-encoding", "utf8",
         "-feature",

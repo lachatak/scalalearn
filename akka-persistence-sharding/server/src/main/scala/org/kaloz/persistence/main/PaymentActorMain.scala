@@ -44,8 +44,14 @@ object PaymentActorMain extends App {
   log.info("Starting HTTP!!!!!")
 
   import akka.http.scaladsl.Http
+  import akka.http.scaladsl.marshalling.Marshaller._
   import akka.http.scaladsl.server.Directives._
   import akka.pattern.ask
+  import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
+  import org.json4s.{DefaultFormats, jackson}
+
+  implicit val serialization = jackson.Serialization
+  implicit val formats = DefaultFormats
 
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
@@ -62,15 +68,11 @@ object PaymentActorMain extends App {
   val route =
     path("token" / Segment) { orderId =>
       get {
-        onSuccess((braintreeRegion ? GetPaymentTokenCommand(orderId)).mapTo[PaymentToken]) { token =>
-          complete(token.token.toString)
-        }
+        complete((braintreeRegion ? GetPaymentTokenCommand(orderId)).mapTo[Either[String, PaymentToken]])
       }
     } ~ path("execute" / Segment) { orderId =>
       get {
-        onSuccess((braintreeRegion ? ExecuteTransactionCommand(orderId, Set(OrderItem(UUID.randomUUID().toString, 10), OrderItem(UUID.randomUUID().toString, 20)))).mapTo[TransactionExecuted]) { ref =>
-          complete(ref.referenceId.toString)
-        }
+        complete((braintreeRegion ? ExecuteTransactionCommand(orderId, Set(OrderItem(UUID.randomUUID().toString, 10), OrderItem(UUID.randomUUID().toString, 20)))).mapTo[Either[String, TransactionExecuted]])
       }
     }
 
@@ -83,3 +85,4 @@ object PaymentActorMain extends App {
   //      .flatMap(_.unbind()) // trigger unbinding from the port
   //      .onComplete(_ => system.terminate()) // and shutdown when done
 }
+

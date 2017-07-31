@@ -38,7 +38,7 @@ object PaymentActorMain extends App {
     typeName = clusterName + BraintreePaymentActor.shardName,
     entityProps = BraintreePaymentActor.props(receptionistName, clusterClient, brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
-    messageExtractor = BraintreePaymentActor.messageExtractor(10)
+    messageExtractor = BraintreePaymentActor.messageExtractor(20)
   )
 
   log.info("Starting HTTP!!!!!")

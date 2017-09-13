@@ -34,8 +34,8 @@ object PaymentActorMain extends App {
   val brainttreeClientActor = system.actorOf(BrainttreeClientActor.props())
   val eventPublisherActor = system.actorOf(EventPublisherActor.props(kafkaIp))
 
-  ClusterSharding(system).start(
-    typeName = clusterName + BraintreePaymentActor.shardName,
+  val braintreeRegion: ActorRef = ClusterSharding(system).start(
+    typeName = BraintreePaymentActor.shardName + "-" + clusterName,
     entityProps = BraintreePaymentActor.props(receptionistName, clusterClient, brainttreeClientActor, eventPublisherActor),
     settings = ClusterShardingSettings(system),
     messageExtractor = BraintreePaymentActor.messageExtractor(20)
@@ -55,8 +55,6 @@ object PaymentActorMain extends App {
 
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
-
-  val braintreeRegion: ActorRef = ClusterSharding(system).shardRegion(clusterName + BraintreePaymentActor.shardName)
 
   if (withReceptionist)
     ClusterClientReceptionist(system).registerService(braintreeRegion)

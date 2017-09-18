@@ -59,22 +59,21 @@ object KnightsArray {
 
     val startPositions: Stream[(Int, Int)] = Stream.from(0).takeWhile(_ < size * size).map(i => (i / size, i % size))
 
-    def isAvailable(position: Position, board: Board): Boolean = board(position._1)(position._2) == -1
-
     def generateNewPositions(from: Position, board: Board): Steps = jumps
       .collect { case (x, y) => (from._1 + x, from._2 + y) }
-      .filter(p => p._1 >= 0 && p._1 <= size - 1 && p._2 >= 0 && p._2 <= size - 1)
-      .filter(isAvailable(_, board))
+      .filter(p => p._1 >= 0 && p._1 <= size - 1 && p._2 >= 0 && p._2 <= size - 1 && board(p._1)(p._2) == -1)
 
     def calculateSteps(positions: Steps = List.empty, board: Board = Vector.fill(size, size)(-1), steps: Int = 0): Solutions = {
+      def updateBoard(p: Position, value: Int): Board =
+        board.updated(p._1, board(p._1).updated(p._2, value))
+
       (positions, steps) match {
         case (_, s) if (s == size * size) => Stream(board)
         case (Nil, _) => Stream(Vector.empty)
         case (x :: Nil, s) =>
-          calculateSteps(generateNewPositions(x, board), board.updated(x._1, board(x._1).updated(x._2, s)), s + 1)
+          calculateSteps(generateNewPositions(x, board), updateBoard(x, s), s + 1)
         case (x :: xs, s) =>
-          calculateSteps(generateNewPositions(x, board), board.updated(x._1, board(x._1).updated(x._2, s)), s + 1) #::: calculateSteps(xs, board.updated(x._1, board(x._1).updated(x._2, s)), s + 1)
-
+          calculateSteps(generateNewPositions(x, board), updateBoard(x, s), s + 1) #::: calculateSteps(xs, updateBoard(x, s), s + 1)
       }
     }
 

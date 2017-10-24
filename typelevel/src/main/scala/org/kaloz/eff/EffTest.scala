@@ -26,7 +26,7 @@ object EffTest extends App {
 
   def either2[R: _eitherString : _task : _flowId](int: Int): Eff[R, Int] = for {
     id <- ask[R, String]
-    v <- if (int == 0) left(s"error in $id") else fromTask(Task.eval(int))
+    v <- if (int == 0) left(s"error in $id") else fromTask(Task(int))
   } yield v
 
   type FxStack = Fx.fx3[Either[String, ?], Task, Reader[String, ?]]

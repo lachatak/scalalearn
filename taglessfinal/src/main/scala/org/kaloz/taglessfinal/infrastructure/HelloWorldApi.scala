@@ -7,8 +7,8 @@ import akka.util.Timeout
 
 import scala.concurrent.duration._
 
-case class HelloWorldApi[F[_]](helloWorldRestService: HelloWorldRestService[F])
-                              (implicit responseMarshaller: ToResponseMarshaller[F[_]]) extends Directives {
+case class HelloWorldApi[F[_], G[_]](helloWorldRestService: HelloWorldRestService[F, G])
+                                    (implicit responseMarshaller: ToResponseMarshaller[G[_]]) extends Directives {
 
   implicit val timeout = Timeout(5 seconds)
 
@@ -23,8 +23,6 @@ case class HelloWorldApi[F[_]](helloWorldRestService: HelloWorldRestService[F])
 }
 
 object HelloWorldApi {
-
-  trait ApiResponse
 
   case class HelloWorldResponse(greeting: String) extends ApiResponse
 

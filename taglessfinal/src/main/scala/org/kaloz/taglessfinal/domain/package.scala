@@ -8,6 +8,8 @@ package object domain {
 
   trait Domain
 
+  final case class Name(name: String) extends Domain
+
   final case class Greeting(greeting: String) extends Domain
 
 }

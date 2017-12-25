@@ -4,7 +4,7 @@ package object domain {
 
   abstract class DomainError(val message: String)
 
-  case class InvalidName(name: String) extends DomainError(s"'$name' is not supported")
+  case class InvalidName(name: String) extends DomainError(s"'$name' is not supported!")
 
   trait Domain
 

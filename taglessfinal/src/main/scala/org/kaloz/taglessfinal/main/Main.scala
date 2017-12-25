@@ -9,8 +9,8 @@ import cats.data.EitherT
 import monix.cats.monixToCatsMonad
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.json4s.{DefaultFormats, Formats, Serialization, jackson}
-import org.kaloz.taglessfinal.domain.HelloWorldService
+import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
+import org.kaloz.taglessfinal.domain.{DomainError, HelloWorldService}
 import org.kaloz.taglessfinal.infrastructure.{HelloWorldApi, HelloWorldAssembler, HelloWorldRestService}
 
 import scala.concurrent.Future
@@ -21,15 +21,15 @@ object Main extends App {
   implicit val materializer = ActorMaterializer()
   implicit val scheduler: Scheduler = Scheduler(actorSystem.dispatcher)
 
-  type DomainExecution[A] = EitherT[Task, Throwable, A]
+  type DomainExecution[A] = EitherT[Task, DomainError, A]
 
   implicit val serialization: Serialization = jackson.Serialization
-  implicit val formats: Formats = DefaultFormats
+  implicit val formats: Formats = DefaultFormats + FieldSerializer[DomainError]()
 
   import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
 
   implicit def eitherTMarshaller(implicit ma: ToEntityMarshaller[AnyRef],
-                                 me: ToEntityMarshaller[Throwable],
+                                 me: ToEntityMarshaller[DomainError],
                                  scheduler: Scheduler): ToResponseMarshaller[DomainExecution[_]] =
     Marshaller(implicit ec =>
       _.value.runAsync.flatMap {
@@ -40,7 +40,7 @@ object Main extends App {
   val helloWorldService = HelloWorldService[DomainExecution]()
   val helloWorldAssembler = HelloWorldAssembler[DomainExecution]()
   val helloWorldRestService = HelloWorldRestService(helloWorldService, helloWorldAssembler)
-  val helloWorldApi = HelloWorldApi(helloWorldRestService)(eitherTMarshaller)
+  val helloWorldApi = HelloWorldApi(helloWorldRestService)
 
   val bindingFuture = Http().bindAndHandle(helloWorldApi.routes, "0.0.0.0", 8080)
 

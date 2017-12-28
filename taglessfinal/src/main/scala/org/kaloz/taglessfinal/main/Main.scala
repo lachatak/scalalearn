@@ -10,8 +10,8 @@ import monix.cats.monixToCatsMonad
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
-import org.kaloz.taglessfinal.domain.{Domain, DomainError, HelloWorldService}
-import org.kaloz.taglessfinal.infrastructure.{ApiResponse, ErrorResponse, HelloWorldApi, HelloWorldAssemblerInterpreter, HelloWorldRestService}
+import org.kaloz.taglessfinal.domain.{DomainError, HelloWorldService}
+import org.kaloz.taglessfinal.infrastructure.{ApiResponse, ErrorResponse, HelloWorldApi, HelloWorldAssemblerImp, HelloWorldRestService}
 
 import scala.concurrent.Future
 
@@ -39,7 +39,7 @@ object Main extends App {
       })
 
   val helloWorldService = HelloWorldService[DomainExecution]()
-  val helloWorldAssembler = HelloWorldAssemblerInterpreter()
+  val helloWorldAssembler = HelloWorldAssemblerImp()
   val helloWorldRestService = HelloWorldRestService(helloWorldService, helloWorldAssembler)
   val helloWorldApi = HelloWorldApi(helloWorldRestService)
 

@@ -10,7 +10,7 @@ import monix.cats.monixToCatsMonad
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
-import org.kaloz.taglessfinal.domain.{Domain, DomainError, HelloWorldService}
+import org.kaloz.taglessfinal.domain.{DomainError, HelloWorldService}
 import org.kaloz.taglessfinal.infrastructure.{ApiResponse, ErrorResponse, HelloWorldApi, HelloWorldAssemblerImp, HelloWorldRestService}
 
 import scala.concurrent.Future

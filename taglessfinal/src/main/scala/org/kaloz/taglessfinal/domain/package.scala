@@ -1,6 +1,6 @@
 package org.kaloz.taglessfinal
 
-import cats.data.ValidatedNel
+import cats.data.Validated
 import cats.implicits._
 import org.scalameta.data.data
 
@@ -21,11 +21,11 @@ package object domain {
 
     val ValidName = "[a-zA-Z]+"
 
-    def apply(name: String): ValidatedNel[DomainError, Name] =
+    def apply(name: String): Validated[DomainError, Name] =
       if (name.matches(ValidName)) {
-        new Name(name).validNel[DomainError]
+        new Name(name).valid[DomainError]
       } else {
-        InvalidName(name).invalidNel[Name]
+        InvalidName(name).invalid[Name]
       }
   }
 

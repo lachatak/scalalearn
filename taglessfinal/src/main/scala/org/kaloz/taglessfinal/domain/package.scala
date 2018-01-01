@@ -29,6 +29,6 @@ package object domain {
       }
   }
 
-  case class Greeting(greeting: String) extends Domain
+  case class Greeting(message: String) extends Domain
 
 }

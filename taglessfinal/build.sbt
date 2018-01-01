@@ -13,10 +13,13 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
 
   scalacOptions ++= Seq(
+    "-deprecation",
+    "-feature",
     "-Ypartial-unification",
     "-language:existentials",
     "-language:higherKinds",
     "-language:implicitConversions",
+    "-language:postfixOps",
     "-Xplugin-require:macroparadise"
   )
 )

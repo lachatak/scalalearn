@@ -1,25 +1,42 @@
 package org.kaloz.taglessfinal.infrastructure
 
 import cats.data.EitherT
+import cats.implicits._
 import monix.cats.monixToCatsMonad
 import org.kaloz.taglessfinal.domain.{DomainError, Greeting, Name}
-import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.HelloWorldResponse
-import org.kaloz.taglessfinal.main.Main.{DomainExecution, InfraExecution}
+import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.{HelloWorldRequest, HelloWorldResponse}
+import org.kaloz.taglessfinal.main.Main.{DomainTaskExecution, InfraTaskExecution}
+import org.kaloz.taglessfinal.main.Main2.{DomainEitherExecution, InfraEitherExecution}
 
-abstract class HelloWorldAssembler[F[_], G[_]] {
+trait HelloWorldAssembler[F[_], G[_]] extends Assembler[F, HelloWorldRequest, Name] with Disassembler[F, G, Greeting, HelloWorldResponse] {
 
-  def assemble(name: String): F[Name]
+  def toDomain(request: HelloWorldRequest): F[Name]
 
-  def disassemble(greeting: F[Greeting]): G[HelloWorldResponse]
+  def fromDomain(greeting: F[Greeting]): G[HelloWorldResponse]
 }
 
-case class HelloWorldAssemblerImp() extends HelloWorldAssembler[DomainExecution, InfraExecution] {
+object HelloWorldAssembler {
 
-  def assemble(name: String): DomainExecution[Name] = EitherT.fromEither(Name(name).toEither)
+  def apply[F[_], G[_]](implicit A: HelloWorldAssembler[F, G]) = A
 
-  def disassemble(greeting: DomainExecution[Greeting]): InfraExecution[HelloWorldResponse] = {
-    val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
+  implicit val helloWorldTaskAssembler: HelloWorldAssembler[DomainTaskExecution, InfraTaskExecution] = new HelloWorldAssembler[DomainTaskExecution, InfraTaskExecution] {
+    def toDomain(request: HelloWorldRequest): DomainTaskExecution[Name] = EitherT.fromEither(Name(request.name).toEither)
 
-    greeting.bimap(disassembleLeft, g => HelloWorldResponse(g.greeting))
+    def fromDomain(greeting: DomainTaskExecution[Greeting]): InfraTaskExecution[HelloWorldResponse] = {
+      val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
+
+      greeting.bimap(disassembleLeft, g => HelloWorldResponse(g.message))
+    }
   }
+
+  implicit val helloWorldEitherAssembler: HelloWorldAssembler[DomainEitherExecution, InfraEitherExecution] = new HelloWorldAssembler[DomainEitherExecution, InfraEitherExecution] {
+    def toDomain(request: HelloWorldRequest): DomainEitherExecution[Name] = Name(request.name).toEither
+
+    def fromDomain(greeting: DomainEitherExecution[Greeting]): InfraEitherExecution[HelloWorldResponse] = {
+      val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
+
+      greeting.bimap(disassembleLeft, g => HelloWorldResponse(g.message))
+    }
+  }
+
 }

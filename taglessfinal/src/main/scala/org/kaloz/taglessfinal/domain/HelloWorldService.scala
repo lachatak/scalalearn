@@ -2,7 +2,7 @@ package org.kaloz.taglessfinal.domain
 
 import cats.MonadError
 
-case class HelloWorldService[F[_]](implicit M: MonadError[F, DomainError]) {
+case class HelloWorldService[F[_]]()(implicit M: MonadError[F, DomainError]) {
 
   def hello(name: Name): F[Greeting] =
     if (name.name.equals("krs")) {

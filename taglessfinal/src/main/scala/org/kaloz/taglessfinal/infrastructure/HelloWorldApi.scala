@@ -4,6 +4,7 @@ package org.kaloz.taglessfinal.infrastructure
 import akka.http.scaladsl.marshalling.ToResponseMarshaller
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.util.Timeout
+import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.HelloWorldRequest
 
 import scala.concurrent.duration._
 
@@ -16,13 +17,15 @@ case class HelloWorldApi[F[_], G[_]](helloWorldRestService: HelloWorldRestServic
     get {
       path("api" / "hello" / Segment) { name =>
         complete {
-          helloWorldRestService.hello(name)
+          helloWorldRestService.hello(HelloWorldRequest(name))
         }
       }
     }
 }
 
 object HelloWorldApi {
+
+  case class HelloWorldRequest(name: String) extends ApiRequest
 
   case class HelloWorldResponse(greeting: String) extends ApiResponse
 

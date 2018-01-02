@@ -1,6 +1,11 @@
 package org.kaloz.taglessfinal
 
-import org.kaloz.taglessfinal.domain.Domain
+import cats.data.EitherT
+import monix.eval.Task
+import org.kaloz.taglessfinal.domain.{Domain, DomainError, Name, ValidatedDomain}
+import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.HelloWorldRequest
+import org.kaloz.taglessfinal.main.Main.DomainTaskExecution
+import cats.implicits._
 
 package object infrastructure {
 
@@ -34,4 +39,32 @@ package object infrastructure {
     def fromDomain(from: F[D]): G[I]
   }
 
+
+
+  trait Assembler2[I, D] {
+    def toDomain(from: I): D
+  }
+
+  trait AssemblerK[F[_]]{
+    def toDomain[I, D](from:I)(implicit A:Assembler2[I, D]):F[D]
+  }
+
+  object AssemblerK{
+    def apply[F[_]](implicit K:AssemblerK[F]) = K
+
+    implicit val domainTaskExecution: AssemblerK[DomainTaskExecution] = new AssemblerK[DomainTaskExecution]{
+      override def toDomain[I, D](from: I)(implicit A: Assembler2[I, D]): DomainTaskExecution[D] = EitherT(Task.eval(A.toDomain(from).asRight[DomainError]))
+    }
+  }
+
+  object Assembler2 {
+
+    def apply[I, D](implicit A:Assembler2[I, D]) = A
+
+    implicit val request2Name: Assembler2[HelloWorldRequest, Name] = (request:HelloWorldRequest) => Name.unsafe(request.name)
+
+    implicit def kindAssembler[F[_], I <:ApiRequest, D <: Domain](implicit K:AssemblerK[F], A:Assembler2[I, D]) = new Assembler2[I, F[D]]{
+      override def toDomain(from: I): F[D] = K.toDomain(from)
+    }
+  }
 }

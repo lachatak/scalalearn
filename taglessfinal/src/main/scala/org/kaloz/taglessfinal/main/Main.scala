@@ -15,6 +15,8 @@ import org.kaloz.taglessfinal.domain.{DomainError, HelloWorldService}
 import org.kaloz.taglessfinal.infrastructure.{ApiResponse, ErrorResponse, HelloWorldApi, HelloWorldRestService}
 
 import scala.concurrent.Future
+import org.kaloz.taglessfinal.infrastructure.Assembler2._
+import org.kaloz.taglessfinal.infrastructure.AssemblerK._
 
 object Main extends App {
 
@@ -53,39 +55,39 @@ object Main extends App {
 
 }
 
-object Main2 extends App {
-
-  implicit val actorSystem = ActorSystem("hello-world")
-  implicit val materializer = ActorMaterializer()
-  implicit val scheduler: Scheduler = Scheduler(actorSystem.dispatcher)
-
-  type DomainEitherExecution[A] = Either[DomainError, A]
-  type InfraEitherExecution[A] = Either[ErrorResponse, A]
-
-  implicit val serialization: Serialization = jackson.Serialization
-  implicit val formats: Formats = DefaultFormats + FieldSerializer[DomainError]()
-
-  import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
-
-  implicit def eitherTMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
-                                 me: ToEntityMarshaller[ErrorResponse],
-                                 scheduler: Scheduler): ToResponseMarshaller[InfraEitherExecution[_]] =
-    Marshaller(implicit ec => r =>
-      Future.successful(r).flatMap {
-        case Right(a) => ma.map(me => HttpResponse(entity = me))(a.asInstanceOf[ApiResponse])
-        case Left(e) => me.map(me => HttpResponse(status = StatusCodes.InternalServerError, entity = me))(e)
-      })
-
-  val helloWorldService = HelloWorldService[DomainEitherExecution]()
-  val helloWorldRestService = HelloWorldRestService(helloWorldService)
-  val helloWorldApi = HelloWorldApi(helloWorldRestService)
-
-  val bindingFuture = Http().bindAndHandle(helloWorldApi.routes, "0.0.0.0", 8080)
-
-  def stop(): Future[Unit] =
-    bindingFuture
-      .flatMap(_.unbind())
-      .flatMap(_ => actorSystem.terminate())
-      .map { _ => () }
-
-}
+//object Main2 extends App {
+//
+//  implicit val actorSystem = ActorSystem("hello-world")
+//  implicit val materializer = ActorMaterializer()
+//  implicit val scheduler: Scheduler = Scheduler(actorSystem.dispatcher)
+//
+//  type DomainEitherExecution[A] = Either[DomainError, A]
+//  type InfraEitherExecution[A] = Either[ErrorResponse, A]
+//
+//  implicit val serialization: Serialization = jackson.Serialization
+//  implicit val formats: Formats = DefaultFormats + FieldSerializer[DomainError]()
+//
+//  import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
+//
+//  implicit def eitherTMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
+//                                 me: ToEntityMarshaller[ErrorResponse],
+//                                 scheduler: Scheduler): ToResponseMarshaller[InfraEitherExecution[_]] =
+//    Marshaller(implicit ec => r =>
+//      Future.successful(r).flatMap {
+//        case Right(a) => ma.map(me => HttpResponse(entity = me))(a.asInstanceOf[ApiResponse])
+//        case Left(e) => me.map(me => HttpResponse(status = StatusCodes.InternalServerError, entity = me))(e)
+//      })
+//
+//  val helloWorldService = HelloWorldService[DomainEitherExecution]()
+//  val helloWorldRestService = HelloWorldRestService(helloWorldService)
+//  val helloWorldApi = HelloWorldApi(helloWorldRestService)
+//
+//  val bindingFuture = Http().bindAndHandle(helloWorldApi.routes, "0.0.0.0", 8080)
+//
+//  def stop(): Future[Unit] =
+//    bindingFuture
+//      .flatMap(_.unbind())
+//      .flatMap(_ => actorSystem.terminate())
+//      .map { _ => () }
+//
+//}

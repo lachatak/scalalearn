@@ -1,12 +1,6 @@
 package org.kaloz.taglessfinal
 
-import cats.data.EitherT
-import cats.implicits._
-import monix.cats.monixToCatsFunctor
-import monix.eval.Task
-import org.kaloz.taglessfinal.domain.{Domain, DomainError, ValidatedDomain}
-import org.kaloz.taglessfinal.main.Main.{DomainTaskExecution, InfraTaskExecution}
-import org.kaloz.taglessfinal.main.Main2.{DomainEitherExecution, InfraEitherExecution}
+import org.kaloz.taglessfinal.domain.{Domain, ValidatedDomain}
 
 package object infrastructure {
 
@@ -22,15 +16,14 @@ package object infrastructure {
 
   trait ApiResponse
 
+  case class ErrorResponse(errorCode: String) extends ApiResponse
+
   object ApiResponse {
 
     implicit class ApiResponseSyntax[F[_], G[_], D <: Domain](domain: F[D])(implicit K: DisassemblerK[F, G]) {
       def toInfrastructure[I <: ApiResponse](implicit D: Disassembler[D, I]): G[I] = K.fromDomain(domain)
     }
-
   }
-
-  case class ErrorResponse(errorCode: String) extends ApiResponse
 
   trait Assembler[I <: ApiRequest, D <: Domain] {
     def toDomain(from: I): ValidatedDomain[D]
@@ -46,14 +39,6 @@ package object infrastructure {
 
   object AssemblerK {
     def apply[F[_]](implicit K: AssemblerK[F]) = K
-
-    implicit val domainTaskExecution: AssemblerK[DomainTaskExecution] = new AssemblerK[DomainTaskExecution] {
-      override def toDomain[I <: ApiRequest, D <: Domain](from: I)(implicit A: Assembler[I, D]): DomainTaskExecution[D] = EitherT(Task.eval(A.toDomain(from).toEither))
-    }
-
-    implicit val domainEitherExecution: AssemblerK[DomainEitherExecution] = new AssemblerK[DomainEitherExecution] {
-      override def toDomain[I <: ApiRequest, D <: Domain](from: I)(implicit A: Assembler[I, D]): DomainEitherExecution[D] = A.toDomain(from).toEither
-    }
   }
 
   trait Disassembler[D <: Domain, I <: ApiResponse] {
@@ -79,21 +64,6 @@ package object infrastructure {
     //      }
     //    }
 
-    implicit val domainTaskExecution: DisassemblerK[DomainTaskExecution, InfraTaskExecution] = new DisassemblerK[DomainTaskExecution, InfraTaskExecution] {
-      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainTaskExecution[D])(implicit D: Disassembler[D, I]): InfraTaskExecution[I] = {
-        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-
-        from.bimap(disassembleLeft, D.fromDomain)
-      }
-    }
-
-    implicit val domainEitherExecution: DisassemblerK[DomainEitherExecution, InfraEitherExecution] = new DisassemblerK[DomainEitherExecution, InfraEitherExecution] {
-      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainEitherExecution[D])(implicit D: Disassembler[D, I]): InfraEitherExecution[I] = {
-        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-
-        from.bimap(disassembleLeft, D.fromDomain)
-      }
-    }
   }
 
 }

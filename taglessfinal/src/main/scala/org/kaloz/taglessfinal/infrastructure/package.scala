@@ -9,7 +9,7 @@ package object infrastructure {
   object ApiRequest {
 
     implicit class ApiRequestSyntax[F[_], I <: ApiRequest](request: I)(implicit K: AssemblerK[F]) {
-      def toDomain[D <: Domain](implicit A: Assembler[I, D]): F[D] = K.toDomain[I, D](request)
+      def toDomain[D <: Domain](implicit A: Assembler[I, D]): F[D] = K.toDomain(request)
     }
 
   }

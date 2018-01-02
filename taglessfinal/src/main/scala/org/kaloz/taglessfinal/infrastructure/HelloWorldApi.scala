@@ -9,8 +9,8 @@ import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.HelloWorldRequest
 
 import scala.concurrent.duration._
 
-case class HelloWorldApi[F[_], G[_]](helloWorldRestService: HelloWorldRestService[F, G])
-                                    (implicit responseMarshaller: ToResponseMarshaller[G[_]]) extends Directives {
+case class HelloWorldApi[G[_]](helloWorldRestService: HelloWorldRestService[G])
+                              (implicit responseMarshaller: ToResponseMarshaller[G[_]]) extends Directives {
 
   implicit val timeout = Timeout(5 seconds)
 

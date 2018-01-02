@@ -30,6 +30,9 @@ package object domain {
         InvalidName(name).invalid[Name]
       }
 
+    /**
+      * Just for testing purpose! Don't use in prod!
+      */
     def unsafe(name: String): Name = new Name(name)
   }
 

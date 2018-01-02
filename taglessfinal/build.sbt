@@ -36,7 +36,11 @@ lazy val root = (project in file("."))
       "de.heikoseeberger" %% "akka-http-json4s" % "1.18.1",
       "org.json4s" %% "json4s-core" % "3.5.0",
       "org.json4s" %% "json4s-jackson" % "3.5.0",
-      "org.scalameta" %% "scalameta" % "2.1.5"
+      "org.scalameta" %% "scalameta" % "2.1.5",
+
+      "com.typesafe.akka" %% "akka-http-testkit" % "10.0.11" % Test,
+      "org.scalatest" %% "scalatest" % "3.0.4" % Test,
+      "org.scalamock" %% "scalamock" % "4.0.0" % Test
     )
   )
 

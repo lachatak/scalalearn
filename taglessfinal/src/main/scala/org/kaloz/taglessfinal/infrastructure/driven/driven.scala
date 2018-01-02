@@ -1,8 +1,8 @@
-package org.kaloz.taglessfinal
+package org.kaloz.taglessfinal.infrastructure
 
 import org.kaloz.taglessfinal.domain.{Domain, ValidatedDomain}
 
-package object infrastructure {
+package object driven {
 
   trait ApiRequest
 
@@ -55,15 +55,6 @@ package object infrastructure {
 
   object DisassemblerK {
     def apply[F[_], G[_]](implicit K: DisassemblerK[F, G]) = K
-
-    //    implicit def instance[F[_, _] :Bifunctor, G[_]]: DisassemblerK[F, G] = new DisassemblerK[F, G] {
-    //      override def fromDomain[D <: Domain, I <: ApiResponse](from: F[DomainError, D])(implicit D: Disassembler[D, I]): G[I] = {
-    //        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-    //
-    //        implicitly[Bifunctor[F]].bimap(from)(disassembleLeft, D.fromDomain).asInstanceOf[G[I]]
-    //      }
-    //    }
-
   }
 
 }

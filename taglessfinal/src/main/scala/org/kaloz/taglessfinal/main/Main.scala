@@ -12,7 +12,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
 import org.kaloz.taglessfinal.domain.{Domain, DomainError, HelloWorldService}
-import org.kaloz.taglessfinal.infrastructure.{ApiRequest, ApiResponse, Assembler, AssemblerK, Disassembler, DisassemblerK, ErrorResponse, HelloWorldApi, HelloWorldRestService}
+import org.kaloz.taglessfinal.infrastructure.driving.api.{HelloWorldApi, HelloWorldRestService}
+import org.kaloz.taglessfinal.infrastructure.driving.{ApiRequest, ApiResponse, Assembler, AssemblerK, Disassembler, DisassemblerK, ErrorResponse}
 
 import scala.concurrent.Future
 

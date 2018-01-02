@@ -35,4 +35,5 @@ package object domain {
 
   case class Greeting(message: String) extends Domain
 
+  case class Person(name:Name) extends Domain
 }

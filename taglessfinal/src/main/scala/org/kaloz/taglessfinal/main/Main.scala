@@ -30,9 +30,9 @@ object EitherTTaskMain extends App {
 
   import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
 
-  implicit def eitherTMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
-                                 me: ToEntityMarshaller[ErrorResponse],
-                                 scheduler: Scheduler): ToResponseMarshaller[InfraTaskExecution[_]] =
+  implicit def eitherTTaskMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
+                                     me: ToEntityMarshaller[ErrorResponse],
+                                     scheduler: Scheduler): ToResponseMarshaller[InfraTaskExecution[_]] =
     Marshaller(implicit ec =>
       _.value.runAsync.flatMap {
         case Right(a) => ma.map(me => HttpResponse(entity = me))(a.asInstanceOf[ApiResponse])

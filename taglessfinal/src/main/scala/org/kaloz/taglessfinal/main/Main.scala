@@ -79,9 +79,9 @@ object EitherMain extends App {
 
   import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
 
-  implicit def eitherTMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
-                                 me: ToEntityMarshaller[ErrorResponse],
-                                 scheduler: Scheduler): ToResponseMarshaller[InfraEitherExecution[_]] =
+  implicit def eitherMarshaller(implicit ma: ToEntityMarshaller[ApiResponse],
+                                me: ToEntityMarshaller[ErrorResponse],
+                                scheduler: Scheduler): ToResponseMarshaller[InfraEitherExecution[_]] =
     Marshaller(implicit ec => r =>
       Future.successful(r).flatMap {
         case Right(a) => ma.map(me => HttpResponse(entity = me))(a.asInstanceOf[ApiResponse])

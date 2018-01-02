@@ -14,6 +14,8 @@ package object domain {
 
   case class NotSupportedName(name: String) extends DomainError(s"'$name' is not supported!")
 
+  type ValidatedDomain[D] = Validated[DomainError, D]
+
   @data
   class Name private(val name: String) extends Domain
 
@@ -21,12 +23,14 @@ package object domain {
 
     val ValidName = "[a-zA-Z]+"
 
-    def apply(name: String): Validated[DomainError, Name] =
+    def apply(name: String): ValidatedDomain[Name] =
       if (name.matches(ValidName)) {
         new Name(name).valid[DomainError]
       } else {
         InvalidName(name).invalid[Name]
       }
+
+    def unsafe(name: String): Name = new Name(name)
   }
 
   case class Greeting(message: String) extends Domain

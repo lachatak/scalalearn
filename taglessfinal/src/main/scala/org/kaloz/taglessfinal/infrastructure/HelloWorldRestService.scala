@@ -7,14 +7,14 @@ import org.kaloz.taglessfinal.infrastructure.ApiResponse.ApiResponseSyntax
 import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.{HelloWorldRequest, HelloWorldResponse}
 
 case class HelloWorldRestService[F[_] : Monad, G[_]](helloWorldService: HelloWorldService[F])
-                                                    (implicit A: HelloWorldAssembler[F, G]) {
+                                                    (implicit A: AssemblerK[F], D: DisassemblerK[F, G]) {
 
   def hello(request: HelloWorldRequest): G[HelloWorldResponse] = {
     val response: F[Greeting] = for {
-      name <- request.toDomain[F, Name]
+      name <- request.toDomain[Name]
       greeting <- helloWorldService.hello(name)
     } yield greeting
 
-    response.toInfrastructure[G, HelloWorldResponse]
+    response.toInfrastructure[HelloWorldResponse]
   }
 }

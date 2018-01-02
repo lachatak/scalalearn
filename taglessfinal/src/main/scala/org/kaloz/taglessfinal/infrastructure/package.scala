@@ -1,6 +1,6 @@
 package org.kaloz.taglessfinal
 
-import org.kaloz.taglessfinal.domain.Domain
+import org.kaloz.taglessfinal.domain.{Domain, ValidatedDomain}
 
 package object infrastructure {
 
@@ -8,30 +8,62 @@ package object infrastructure {
 
   object ApiRequest {
 
-    implicit class ApiRequestSyntax[I <: ApiRequest](request: I) {
-      def toDomain[F[_], D <: Domain](implicit A: Assembler[F, I, D]): F[D] = A.toDomain(request)
+    implicit class ApiRequestSyntax[F[_], I <: ApiRequest](request: I)(implicit K: AssemblerK[F]) {
+      def toDomain[D <: Domain](implicit A: Assembler[I, D]): F[D] = K.toDomain(request)
     }
 
   }
 
   trait ApiResponse
 
-  object ApiResponse {
-
-    implicit class ApiResponseSyntax[F[_], D <: Domain](domain: F[D]) {
-      def toInfrastructure[G[_], I <: ApiResponse](implicit D: Disassembler[F, G, D, I]): G[I] = D.fromDomain(domain)
-    }
-
-  }
-
   case class ErrorResponse(errorCode: String) extends ApiResponse
 
-  trait Assembler[F[_], I <: ApiRequest, D <: Domain] {
-    def toDomain(from: I): F[D]
+  object ApiResponse {
+
+    implicit class ApiResponseSyntax[F[_], G[_], D <: Domain](domain: F[D])(implicit K: DisassemblerK[F, G]) {
+      def toInfrastructure[I <: ApiResponse](implicit D: Disassembler[D, I]): G[I] = K.fromDomain(domain)
+    }
   }
 
-  trait Disassembler[F[_], G[_], D <: Domain, I <: ApiResponse] {
-    def fromDomain(from: F[D]): G[I]
+  trait Assembler[I <: ApiRequest, D <: Domain] {
+    def toDomain(from: I): ValidatedDomain[D]
+  }
+
+  object Assembler {
+    def apply[I <: ApiRequest, D <: Domain](implicit A: Assembler[I, D]) = A
+  }
+
+  trait AssemblerK[F[_]] {
+    def toDomain[I <: ApiRequest, D <: Domain](from: I)(implicit A: Assembler[I, D]): F[D]
+  }
+
+  object AssemblerK {
+    def apply[F[_]](implicit K: AssemblerK[F]) = K
+  }
+
+  trait Disassembler[D <: Domain, I <: ApiResponse] {
+    def fromDomain(from: D): I
+  }
+
+  object Disassembler {
+    def apply[D <: Domain, I <: ApiResponse](implicit D: Disassembler[D, I]) = D
+  }
+
+  trait DisassemblerK[F[_], G[_]] {
+    def fromDomain[D <: Domain, I <: ApiResponse](from: F[D])(implicit D: Disassembler[D, I]): G[I]
+  }
+
+  object DisassemblerK {
+    def apply[F[_], G[_]](implicit K: DisassemblerK[F, G]) = K
+
+    //    implicit def instance[F[_, _] :Bifunctor, G[_]]: DisassemblerK[F, G] = new DisassemblerK[F, G] {
+    //      override def fromDomain[D <: Domain, I <: ApiResponse](from: F[DomainError, D])(implicit D: Disassembler[D, I]): G[I] = {
+    //        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
+    //
+    //        implicitly[Bifunctor[F]].bimap(from)(disassembleLeft, D.fromDomain).asInstanceOf[G[I]]
+    //      }
+    //    }
+
   }
 
 }

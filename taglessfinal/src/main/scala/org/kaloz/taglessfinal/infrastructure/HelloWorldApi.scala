@@ -4,7 +4,7 @@ package org.kaloz.taglessfinal.infrastructure
 import akka.http.scaladsl.marshalling.ToResponseMarshaller
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.util.Timeout
-import org.kaloz.taglessfinal.domain.{Greeting, Name}
+import org.kaloz.taglessfinal.domain.{DomainError, Greeting, Name}
 import org.kaloz.taglessfinal.infrastructure.HelloWorldApi.HelloWorldRequest
 
 import scala.concurrent.duration._
@@ -35,7 +35,12 @@ object HelloWorldApi {
   case class HelloWorldResponse(greeting: String) extends ApiResponse
 
   object HelloWorldResponse {
-    implicit val toHelloWorldResponse: Disassembler[Greeting, HelloWorldResponse] = (domain: Greeting) => HelloWorldResponse(domain.message)
+    implicit val toHelloWorldResponse: Disassembler[Greeting, HelloWorldResponse] = new Disassembler[Greeting, HelloWorldResponse] {
+
+      override def fromDomain(from: Greeting): HelloWorldResponse = HelloWorldResponse(from.message)
+
+      override def fromDomainError[E <: DomainError](error: E): ErrorResponse = ErrorResponse(error.message)
+    }
   }
 
 }

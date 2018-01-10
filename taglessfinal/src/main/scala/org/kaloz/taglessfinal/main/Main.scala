@@ -7,13 +7,14 @@ import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.stream.ActorMaterializer
 import cats.data.EitherT
 import cats.implicits._
+import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
 import monix.cats.monixToCatsMonad
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
 import org.kaloz.taglessfinal.domain.{Domain, DomainError, HelloWorldServiceImpl}
 import org.kaloz.taglessfinal.infrastructure.{ApiRequest, ApiResponse, Assembler, AssemblerK, Disassembler, DisassemblerK, ErrorResponse, HelloWorldApi, HelloWorldRestServiceImpl}
-import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
+
 import scala.concurrent.{ExecutionContext, Future}
 
 object EitherTTaskMain extends App {
@@ -44,11 +45,8 @@ object EitherTTaskMain extends App {
 
   implicit val disassemblerK: DisassemblerK[DomainTaskExecution, InfraTaskExecution] =
     new DisassemblerK[DomainTaskExecution, InfraTaskExecution] {
-      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainTaskExecution[D])(implicit D: Disassembler[D, I]): InfraTaskExecution[I] = {
-        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-
-        from.bimap(disassembleLeft, D.fromDomain)
-      }
+      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainTaskExecution[D])(implicit D: Disassembler[D, I]): InfraTaskExecution[I] =
+        from.bimap(D.fromDomainError, D.fromDomain)
     }
 
   val helloWorldService = HelloWorldServiceImpl[DomainTaskExecution]()
@@ -92,11 +90,8 @@ object EitherMain extends App {
 
   implicit val disassemblerK: DisassemblerK[DomainEitherExecution, InfraEitherExecution] =
     new DisassemblerK[DomainEitherExecution, InfraEitherExecution] {
-      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainEitherExecution[D])(implicit D: Disassembler[D, I]): InfraEitherExecution[I] = {
-        val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-
-        from.bimap(disassembleLeft, D.fromDomain)
-      }
+      override def fromDomain[D <: Domain, I <: ApiResponse](from: DomainEitherExecution[D])(implicit D: Disassembler[D, I]): InfraEitherExecution[I] =
+        from.bimap(D.fromDomainError, D.fromDomain)
     }
 
   val helloWorldService = HelloWorldServiceImpl[DomainEitherExecution]()

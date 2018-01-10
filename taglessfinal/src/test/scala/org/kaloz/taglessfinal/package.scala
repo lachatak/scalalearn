@@ -19,11 +19,8 @@ package object taglessfinal {
   }
 
   implicit val disassemblerK: DisassemblerK[TestDomainType, TestInfraType] = new DisassemblerK[TestDomainType, TestInfraType] {
-    override def fromDomain[D <: Domain, I <: ApiResponse](from: TestDomainType[D])(implicit D: Disassembler[D, I]): TestInfraType[I] = {
-      val disassembleLeft = (domainError: DomainError) => ErrorResponse(domainError.message)
-
-      from.bimap(disassembleLeft, D.fromDomain)
-    }
+    override def fromDomain[D <: Domain, I <: ApiResponse](from: TestDomainType[D])(implicit D: Disassembler[D, I]): TestInfraType[I] =
+      from.bimap(D.fromDomainError, D.fromDomain)
   }
 
   implicit val serialization: Serialization = jackson.Serialization

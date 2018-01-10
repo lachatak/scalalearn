@@ -1,6 +1,6 @@
 package org.kaloz.taglessfinal
 
-import org.kaloz.taglessfinal.domain.{Domain, ValidatedDomain}
+import org.kaloz.taglessfinal.domain.{Domain, DomainError, ValidatedDomain}
 
 package object infrastructure {
 
@@ -23,6 +23,7 @@ package object infrastructure {
     implicit class ApiResponseSyntax[F[_], G[_], D <: Domain](domain: F[D])(implicit K: DisassemblerK[F, G]) {
       def toInfrastructure[I <: ApiResponse](implicit D: Disassembler[D, I]): G[I] = K.fromDomain(domain)
     }
+
   }
 
   trait Assembler[I <: ApiRequest, D <: Domain] {
@@ -43,6 +44,8 @@ package object infrastructure {
 
   trait Disassembler[D <: Domain, I <: ApiResponse] {
     def fromDomain(from: D): I
+
+    def fromDomainError[E <: DomainError](error:E) : ErrorResponse
   }
 
   object Disassembler {

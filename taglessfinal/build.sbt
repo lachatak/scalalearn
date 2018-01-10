@@ -28,9 +28,8 @@ lazy val root = (project in file("."))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % "0.9.0",
-      "io.monix" %% "monix" % "2.3.2",
-      "io.monix" %% "monix-cats" % "2.3.2",
+      "org.typelevel" %% "cats-core" % "1.0.1",
+      "io.monix" %% "monix" % "3.0.0-M3",
       "com.typesafe.akka" %% "akka-http" % "10.0.11",
       "com.typesafe.akka" %% "akka-http-core" % "10.0.11",
       "de.heikoseeberger" %% "akka-http-json4s" % "1.18.1",

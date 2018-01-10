@@ -7,13 +7,13 @@ import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.stream.ActorMaterializer
 import cats.data.EitherT
 import cats.implicits._
-import monix.cats.monixToCatsMonad
+import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.json4s.{DefaultFormats, FieldSerializer, Formats, Serialization, jackson}
 import org.kaloz.taglessfinal.domain.{Domain, DomainError, HelloWorldServiceImpl}
 import org.kaloz.taglessfinal.infrastructure.{ApiRequest, ApiResponse, Assembler, AssemblerK, Disassembler, DisassemblerK, ErrorResponse, HelloWorldApi, HelloWorldRestServiceImpl}
-import de.heikoseeberger.akkahttpjson4s.Json4sSupport.marshaller
+
 import scala.concurrent.{ExecutionContext, Future}
 
 object EitherTTaskMain extends App {
